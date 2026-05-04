@@ -36,6 +36,7 @@ import {
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
 
@@ -70,6 +71,8 @@ export type ComposerCardProps = {
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartBranchSelect: (refName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  smartNameSelection: SmartWorkspaceNameSelection | null
+  onClearSmartNameSelection: () => void
   agentPrompt: string
   onAgentPromptChange: (value: string) => void
   onPromptKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
@@ -1048,12 +1051,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     (item: GitHubWorkItem): void => {
       applyLinkedWorkItem(item)
       setStartFromResetHint(null)
-      if (item.type !== 'pr' || !selectedRepo) {
+      const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
+      if (item.type !== 'pr' || !repoForItem) {
         return
       }
       void window.api.worktrees
         .resolvePrBase({
-          repoId: selectedRepo.id,
+          repoId: repoForItem.id,
           prNumber: item.number,
           ...(item.branchName ? { headRefName: item.branchName } : {}),
           ...(item.isCrossRepository !== undefined
@@ -1067,7 +1071,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           handleBaseBranchPrSelect(result.baseBranch, item)
         })
     },
-    [applyLinkedWorkItem, handleBaseBranchPrSelect, selectedRepo]
+    [applyLinkedWorkItem, eligibleRepos, handleBaseBranchPrSelect, selectedRepo]
   )
 
   const handleSmartBranchSelect = useCallback(
@@ -1116,6 +1120,44 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [name]
   )
+
+  const handleClearSmartNameSelection = useCallback((): void => {
+    setLinkedIssue('')
+    setLinkedPR(null)
+    setLinkedWorkItem(null)
+    setBaseBranch(undefined)
+    setStartFromResetHint(null)
+    if (name === lastAutoNameRef.current) {
+      setName('')
+      lastAutoNameRef.current = ''
+    }
+    if (noteRef.current === lastAutoNoteRef.current) {
+      setNote('')
+      lastAutoNoteRef.current = ''
+    }
+  }, [name])
+
+  const smartNameSelection = useMemo<SmartWorkspaceNameSelection | null>(() => {
+    if (linkedWorkItem) {
+      const isLinear = linkedWorkItem.number === 0 && !linkedWorkItem.url.includes('github.com')
+      return {
+        kind: isLinear ? 'linear' : 'github',
+        label:
+          isLinear || linkedWorkItem.number === 0
+            ? linkedWorkItem.title
+            : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
+        description: isLinear
+          ? 'Linear'
+          : linkedWorkItem.type === 'pr'
+            ? 'GitHub PR'
+            : 'GitHub issue'
+      }
+    }
+    if (baseBranch) {
+      return { kind: 'branch', label: baseBranch, description: 'Branch' }
+    }
+    return null
+  }, [baseBranch, linkedWorkItem])
 
   const handleOpenAgentSettings = useCallback((): void => {
     openSettingsTarget({ pane: 'agents', repoId: null })
@@ -1418,6 +1460,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,
     onSmartBranchSelect: handleSmartBranchSelect,
     onSmartLinearIssueSelect: handleSmartLinearIssueSelect,
+    smartNameSelection,
+    onClearSmartNameSelection: handleClearSmartNameSelection,
     agentPrompt,
     onAgentPromptChange: setAgentPrompt,
     onPromptKeyDown: handlePromptKeyDown,

@@ -439,6 +439,14 @@ const api = {
       type?: 'issue' | 'pr'
     }): Promise<unknown> => ipcRenderer.invoke('gh:workItem', args),
 
+    workItemByOwnerRepo: (args: {
+      repoPath: string
+      owner: string
+      repo: string
+      number: number
+      type: 'issue' | 'pr'
+    }): Promise<unknown> => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
+
     workItemDetails: (args: {
       repoPath: string
       number: number

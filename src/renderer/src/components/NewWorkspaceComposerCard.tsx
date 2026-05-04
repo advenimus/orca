@@ -19,7 +19,9 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { GitHubWorkItem, LinearIssue, SparsePreset, TuiAgent } from '../../../shared/types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
-import SmartWorkspaceNameField from '@/components/new-workspace/SmartWorkspaceNameField'
+import SmartWorkspaceNameField, {
+  type SmartWorkspaceNameSelection
+} from '@/components/new-workspace/SmartWorkspaceNameField'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -39,6 +41,8 @@ type NewWorkspaceComposerCardProps = {
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartBranchSelect: (refName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  smartNameSelection: SmartWorkspaceNameSelection | null
+  onClearSmartNameSelection: () => void
   detectedAgentIds: Set<TuiAgent> | null
   onOpenAgentSettings: () => void
   advancedOpen: boolean
@@ -182,6 +186,8 @@ export default function NewWorkspaceComposerCard({
   onSmartGitHubItemSelect,
   onSmartBranchSelect,
   onSmartLinearIssueSelect,
+  smartNameSelection,
+  onClearSmartNameSelection,
   detectedAgentIds,
   onOpenAgentSettings,
   advancedOpen,
@@ -292,17 +298,21 @@ export default function NewWorkspaceComposerCard({
 
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">
-            Workspace Name <span className="text-muted-foreground/70">[Optional]</span>
+            Name or &apos;Create From&apos;{' '}
+            <span className="text-muted-foreground/70">[Optional]</span>
           </label>
           <SmartWorkspaceNameField
             inputRef={nameInputRef}
             repos={eligibleRepos}
             repoId={repoId}
+            onRepoChange={onRepoChange}
             value={name}
             onValueChange={onNameValueChange}
             onGitHubItemSelect={onSmartGitHubItemSelect}
             onBranchSelect={onSmartBranchSelect}
             onLinearIssueSelect={onSmartLinearIssueSelect}
+            selectedSource={smartNameSelection}
+            onClearSelectedSource={onClearSmartNameSelection}
             onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user
@@ -351,6 +361,21 @@ export default function NewWorkspaceComposerCard({
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             onTriggerEnter={createDisabled ? undefined : onCreate}
           />
+        </div>
+
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onToggleAdvanced}
+            className="-ml-2 text-xs"
+          >
+            Advanced
+            <ChevronDown
+              className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
+            />
+          </Button>
         </div>
 
         <div
@@ -500,21 +525,6 @@ export default function NewWorkspaceComposerCard({
           {createError}
         </div>
       ) : null}
-
-      <div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onToggleAdvanced}
-          className="-ml-2 text-xs"
-        >
-          Advanced
-          <ChevronDown
-            className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
-          />
-        </Button>
-      </div>
 
       <div className="flex justify-end">
         <Button
