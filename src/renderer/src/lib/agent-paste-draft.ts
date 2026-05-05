@@ -1,48 +1,44 @@
-import {
-  TUI_AGENT_CONFIG,
-  type AgentDraftInjectionStrategy
-} from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/types'
 import { detectAgentStatusFromTitle } from '../../../shared/agent-detection'
 import { isShellProcess } from '@/lib/tui-agent-startup'
 import { useAppStore } from '@/store'
 
-// Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Gemini)
-// treat the inserted text as a single atomic paste — they put it in their
-// input buffer as a draft instead of echoing character-by-character or
-// triggering line-edit shortcuts. Intentionally omit a trailing '\r' so the
-// draft never auto-submits; the user gets to review and send themselves.
+// Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Pi /
+// OpenCode / Gemini) treat the inserted text as a single atomic paste — the
+// payload lands in the input buffer as a draft instead of echoing
+// character-by-character or triggering line-edit shortcuts. Intentionally
+// omit a trailing '\r' so the draft never auto-submits; the user reviews
+// and sends the prompt themselves.
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 
-const CHAR_TYPING_DELAY_MS = 25
 const POLL_INTERVAL_MS = 120
-// Why: many TUIs render their input box only after a startup splash. Empirical
-// timings (test-paste rig in /tmp/opencode): codex ≥ 600ms, pi ≥ 600ms,
-// opencode ≥ 3000ms. Wait until we see two consecutive polls that look like
-// the TUI is rendered (idle title OR non-shell foreground stable for 1500ms),
-// or until this hard floor passes — whichever comes first.
+
+// Why: empirical timings (node-pty + xterm-headless rig that simulates the
+// new-workspace flow): Claude renders idle title at ~500ms, Pi at ~1s,
+// Codex needs the input box ready at ~2.5s, OpenCode at ~3s. The floor
+// guarantees we don't paste before the slowest known TUI is mounted; the
+// stable-foreground signal handles TUIs (Codex) whose title never reads as
+// idle because they show a working spinner indefinitely until user input.
 const MIN_TUI_READY_MS = 2500
 const STABLE_FG_DURATION_MS = 1500
+const STABLE_TITLE_DURATION_MS = 800
+const TITLE_IDLE_GRACE_MS = 200
 const READINESS_TIMEOUT_MS = 12000
 
-function resolveDraftStrategy(agent: TuiAgent | undefined): AgentDraftInjectionStrategy {
-  if (!agent) {
-    return 'bracketed-paste'
-  }
-  return TUI_AGENT_CONFIG[agent].draftInjectionStrategy ?? 'bracketed-paste'
-}
-
 /**
- * Wait for the agent on `tabId` to be ready, then deliver `content` into its
- * input buffer as a non-submitted draft. Strategy is per-agent (see
- * `TUI_AGENT_CONFIG[agent].draftInjectionStrategy`); falls back to bracketed
- * paste when the agent is not specified.
+ * Wait until the agent on `tabId` has a rendered, input-accepting TUI, then
+ * paste `content` into its input buffer using bracketed-paste mode. Never
+ * appends `\r`, so the draft stays editable for the user to review/append
+ * before sending.
  *
- * Returns true when an injection was issued, false on timeout, missing PTY,
- * or `unsupported` strategy. `onTimeout` lets the caller surface a UI hint
- * (e.g. toast) when the agent doesn't reach a ready state inside the
- * readiness budget.
+ * Returns true when the paste was issued, false on timeout or missing PTY.
+ * `onTimeout` lets the caller surface a UI hint (e.g. toast) when the agent
+ * doesn't reach a ready state inside `timeoutMs`.
+ *
+ * `agent` is currently informational only — kept on the call signature so
+ * future per-agent specializations (e.g. an `unsupported` opt-out) have a
+ * place to land without retouching every call site.
  */
 export async function pasteDraftWhenAgentReady(args: {
   tabId: string
@@ -52,11 +48,7 @@ export async function pasteDraftWhenAgentReady(args: {
   timeoutMs?: number
   onTimeout?: () => void
 }): Promise<boolean> {
-  const { tabId, expectedProcess, content, agent, timeoutMs, onTimeout } = args
-  const strategy = resolveDraftStrategy(agent)
-  if (strategy === 'unsupported') {
-    return false
-  }
+  const { tabId, expectedProcess, content, timeoutMs, onTimeout } = args
 
   const ready = await waitForTuiInputReady(tabId, expectedProcess, {
     timeoutMs: timeoutMs ?? READINESS_TIMEOUT_MS
@@ -71,19 +63,6 @@ export async function pasteDraftWhenAgentReady(args: {
     return false
   }
 
-  if (strategy === 'type-chars') {
-    await typeChars(ptyId, content)
-    return true
-  }
-
-  // Why: 'bracketed-paste-slow' is preserved for callers / agents that
-  // explicitly opt into a longer wait beyond the standard readiness check.
-  // The default readiness logic already accounts for slow-startup TUIs, so
-  // the 'slow' variant is mostly a no-op on top, but kept as an escape hatch.
-  if (strategy === 'bracketed-paste-slow') {
-    await new Promise((resolve) => window.setTimeout(resolve, 800))
-  }
-
   window.api.pty.write(ptyId, `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}`)
   return true
 }
@@ -91,26 +70,28 @@ export async function pasteDraftWhenAgentReady(args: {
 /**
  * Heuristic readiness for "the TUI's input box is mounted and accepting
  * input." Combines three signals:
- *   1. `titleSuggestsTuiReady`: the title detector says the agent is in a
- *      visibly-rendered state (idle, working with a real label, etc.) — i.e.
- *      anything other than a bare empty title.
- *   2. `foreground stable for ≥1500ms` on a non-shell process.
- *   3. Hard floor of `MIN_TUI_READY_MS` to absorb slow renderers (OpenCode).
+ *   1. Title parses as `idle` — the strongest signal; only a short grace
+ *      is added before declaring ready.
+ *   2. Non-shell foreground process held for ≥STABLE_FG_DURATION_MS.
+ *   3. Hard floor of MIN_TUI_READY_MS to absorb slow renderers (OpenCode).
+ *
+ * On timeout, returns true only if a non-shell process is in the
+ * foreground — never paste into a bare shell.
  */
 async function waitForTuiInputReady(
   tabId: string,
   expectedProcess: string,
   opts: { timeoutMs: number }
 ): Promise<boolean> {
-  const deadline = Date.now() + opts.timeoutMs
   const startedAt = Date.now()
+  const deadline = startedAt + opts.timeoutMs
   let firstNonShellFgAt: number | null = null
   let firstNonEmptyTitleAt: number | null = null
 
   while (Date.now() < deadline) {
     const ptyId = useAppStore.getState().ptyIdsByTabId[tabId]?.[0]
     if (!ptyId) {
-      await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS))
+      await sleep(POLL_INTERVAL_MS)
       continue
     }
 
@@ -124,22 +105,11 @@ async function waitForTuiInputReady(
 
     const titleIsIdle = titles.some((t) => detectAgentStatusFromTitle(t) === 'idle')
     const titleIsNonEmpty = titles.some((t) => t.trim().length > 0)
-    const fgIsNonShell =
-      foreground !== '' &&
-      !isShellProcess(foreground) &&
-      // Why: argv-mode agents distributed via npm (claude, codex, pi) show up
-      // in node-pty's `process` field as 'node' even though the underlying
-      // binary is the agent. That's the strongest "agent has launched" signal
-      // we get for these wrappers, so accept it like any other non-shell fg.
-      (foreground === expectedProcess ||
-        foreground.startsWith(`${expectedProcess}.`) ||
-        foreground.endsWith(`/${expectedProcess}`) ||
-        foreground === 'node')
+    const fgIsNonShell = isAgentForeground(foreground, expectedProcess)
 
     const elapsed = Date.now() - startedAt
-    if (titleIsIdle && elapsed >= 200) {
-      // Title-idle is the strongest signal; only a tiny grace needed.
-      await new Promise((resolve) => window.setTimeout(resolve, 200))
+    if (titleIsIdle && elapsed >= TITLE_IDLE_GRACE_MS) {
+      await sleep(TITLE_IDLE_GRACE_MS)
       return true
     }
 
@@ -152,19 +122,20 @@ async function waitForTuiInputReady(
 
     const fgStable =
       firstNonShellFgAt !== null && Date.now() - firstNonShellFgAt >= STABLE_FG_DURATION_MS
-    const titleStable = firstNonEmptyTitleAt !== null && Date.now() - firstNonEmptyTitleAt >= 800
+    const titleStable =
+      firstNonEmptyTitleAt !== null && Date.now() - firstNonEmptyTitleAt >= STABLE_TITLE_DURATION_MS
     const minimumWaitElapsed = elapsed >= MIN_TUI_READY_MS
 
     if ((fgStable || titleStable) && minimumWaitElapsed) {
       return true
     }
 
-    await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS))
+    await sleep(POLL_INTERVAL_MS)
   }
 
-  // Why: timed out without a clean signal. As a last-ditch fallback, only
-  // signal ready if a non-shell foreground process is present — this prevents
-  // typing the draft into a bare shell prompt when something went wrong.
+  // Why: timed out without a clean signal. Fall back to "non-shell foreground
+  // exists" so we don't blast the URL into a bare shell prompt if the agent
+  // failed to launch.
   const ptyId = useAppStore.getState().ptyIdsByTabId[tabId]?.[0]
   if (!ptyId) {
     return false
@@ -175,6 +146,22 @@ async function waitForTuiInputReady(
   } catch {
     return false
   }
+}
+
+// Why: argv-mode agents distributed via npm (claude, codex, pi) show up in
+// node-pty's `process` field as 'node' even though the underlying binary is
+// the agent. That's the strongest "agent has launched" signal we get for
+// these wrappers, so accept it like any other non-shell agent foreground.
+function isAgentForeground(foreground: string, expectedProcess: string): boolean {
+  if (foreground === '' || isShellProcess(foreground)) {
+    return false
+  }
+  return (
+    foreground === expectedProcess ||
+    foreground.startsWith(`${expectedProcess}.`) ||
+    foreground.endsWith(`/${expectedProcess}`) ||
+    foreground === 'node'
+  )
 }
 
 function collectPaneTitles(tabId: string): string[] {
@@ -200,13 +187,6 @@ function collectPaneTitles(tabId: string): string[] {
   return titles
 }
 
-async function typeChars(ptyId: string, content: string): Promise<void> {
-  // Why: send characters individually with a small delay so the TUI's input
-  // handler can render and debounce between keystrokes. URLs only contain
-  // safe characters (no control codes, no tab/space/newline) so each char is
-  // a literal keypress with no accidental command-trigger semantics.
-  for (const char of content) {
-    window.api.pty.write(ptyId, char)
-    await new Promise((resolve) => window.setTimeout(resolve, CHAR_TYPING_DELAY_MS))
-  }
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
 }

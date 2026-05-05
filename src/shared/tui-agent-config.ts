@@ -7,26 +7,11 @@ export type AgentPromptInjectionMode =
   | 'flag-interactive'
   | 'stdin-after-start'
 
-// Why: how Orca should type a non-submitted draft (e.g. a linked work-item
-// URL) into the agent's live input box. Different TUIs accept different
-// signals — Claude reliably honors bracketed paste, Codex needs a longer
-// settle period before the input is editable, Pi/OpenCode work best with
-// per-character typing because they intercept paste markers themselves.
-export type AgentDraftInjectionStrategy =
-  | 'bracketed-paste'
-  | 'bracketed-paste-slow'
-  | 'type-chars'
-  | 'unsupported'
-
 export type TuiAgentConfig = {
   detectCmd: string
   launchCmd: string
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
-  /** Defaults to 'bracketed-paste' when omitted. Set 'unsupported' for
-   *  agents whose TUI ignores both bracketed paste and char-by-char input
-   *  before user interaction (rare; surface a toast instead). */
-  draftInjectionStrategy?: AgentDraftInjectionStrategy
 }
 
 // Why: the new-workspace handoff depends on three pieces of per-agent
@@ -47,26 +32,18 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'codex',
     expectedProcess: 'codex',
     promptInjectionMode: 'argv'
-    // Default 'bracketed-paste'. The TUI ready-wait in agent-paste-draft.ts
-    // already absorbs Codex's splash by requiring stable non-shell foreground
-    // for ≥1.5s before pasting; no agent-specific override needed.
   },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
     expectedProcess: 'opencode',
     promptInjectionMode: 'flag-prompt'
-    // Default 'bracketed-paste'. Empirical timing shows OpenCode needs ~3s
-    // before its input accepts pastes — the readiness floor in
-    // agent-paste-draft.ts is calibrated for that.
   },
   pi: {
     detectCmd: 'pi',
     launchCmd: 'pi',
     expectedProcess: 'pi',
     promptInjectionMode: 'argv'
-    // Default 'bracketed-paste'. Pi sets a `π - <user>` title once its TUI
-    // is rendered, which the title-idle path matches in <2s.
   },
   gemini: {
     detectCmd: 'gemini',
