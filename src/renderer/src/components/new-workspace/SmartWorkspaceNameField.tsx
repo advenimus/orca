@@ -395,12 +395,21 @@ export default function SmartWorkspaceNameField({
 
   const rows = useMemo<RowEntry[]>(() => {
     const trimmed = value.trim()
+    // Why: source results (githubItems / branches / linearIssues) are driven
+    // by debouncedQuery, so they're stale until the user pauses typing for
+    // SEARCH_DEBOUNCE_MS. If we leave stale rows in the list, cmdk's built-in
+    // Enter handler picks the highlighted (wrong) source row when the user
+    // types fast and hits Enter. Suppress source rows while stale, so the
+    // popover shows only the typed-text row (use-name in Smart, create-branch
+    // in Branches), and Enter naturally commits the typed text.
+    const stale = trimmed.length > 0 && debouncedQuery.trim() !== trimmed
     // Why: on the Branches tab the generic "Use … as workspace name" row
     // reads as off-topic — the user is picking/creating a branch. Swap it
     // for a branch-creation row that's pinned above existing-branch results
     // (suppressed when an existing branch matches exactly so we don't offer
     // to "create" something that already exists).
-    const branchExactMatch = mode === 'branches' && trimmed.length > 0 && branches.includes(trimmed)
+    const branchExactMatch =
+      !stale && mode === 'branches' && trimmed.length > 0 && branches.includes(trimmed)
     // Why: the "Use … as workspace name" row only makes sense in Smart
     // mode, where the user might be typing a free-form name. On dedicated
     // source tabs (GitHub/Linear/Branches) it's off-topic — the user is
@@ -420,7 +429,7 @@ export default function SmartWorkspaceNameField({
     if (mode === 'text') {
       return nextRows
     }
-    if (mode === 'smart' || mode === 'github') {
+    if (!stale && (mode === 'smart' || mode === 'github')) {
       nextRows.push(
         ...githubItems.map((item) => ({
           kind: 'github' as const,
@@ -433,15 +442,17 @@ export default function SmartWorkspaceNameField({
       if (createBranchRow) {
         nextRows.push(createBranchRow)
       }
-      nextRows.push(
-        ...branches.map((refName) => ({
-          kind: 'branch' as const,
-          value: `branch-${refName}`,
-          refName
-        }))
-      )
+      if (!stale) {
+        nextRows.push(
+          ...branches.map((refName) => ({
+            kind: 'branch' as const,
+            value: `branch-${refName}`,
+            refName
+          }))
+        )
+      }
     }
-    if (mode === 'smart' || mode === 'linear') {
+    if (!stale && (mode === 'smart' || mode === 'linear')) {
       nextRows.push(
         ...linearIssues.map((issue) => ({
           kind: 'linear' as const,
@@ -451,7 +462,7 @@ export default function SmartWorkspaceNameField({
       )
     }
     return nextRows.slice(0, RESULT_LIMIT + 1)
-  }, [branches, githubItems, linearIssues, mode, value])
+  }, [branches, debouncedQuery, githubItems, linearIssues, mode, value])
 
   useEffect(() => {
     if (rows.length > 0) {
@@ -702,26 +713,6 @@ export default function SmartWorkspaceNameField({
                         !event.ctrlKey &&
                         !event.shiftKey
                       ) {
-                        // Why: when the user types faster than the search
-                        // debounce, `rows`/`commandValue` still reflect the
-                        // previous query — pressing Enter would silently pick
-                        // a stale source row (e.g., a PR from the prior
-                        // letters). Treat results as stale while the search
-                        // is loading or the debounced query hasn't caught up
-                        // to the input value, and commit the typed text
-                        // instead. In Smart/Branches that lines up with the
-                        // use-name / create-branch row the user would have
-                        // wanted; in GitHub/Linear it preserves what they
-                        // typed rather than firing a wrong-source pick.
-                        const trimmed = value.trim()
-                        const stale =
-                          trimmed.length > 0 && (loading || debouncedQuery.trim() !== trimmed)
-                        if (stale) {
-                          event.preventDefault()
-                          onValueChange(trimmed)
-                          setOpen(false)
-                          return
-                        }
                         if (open && rows.length > 0) {
                           const row = rows.find((entry) => entry.value === commandValue)
                           if (row) {
