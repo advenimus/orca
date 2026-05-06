@@ -91,7 +91,9 @@ async function pickDebugPort() {
   const base = 9333 + (seed % 200) // deterministic base in 9333..9532; probe sweeps up to base+63
   for (let i = 0; i < 64; i++) {
     const p = base + i
-    if (await isPortFree(p)) return p
+    if (await isPortFree(p)) {
+      return p
+    }
   }
   return null
 }
