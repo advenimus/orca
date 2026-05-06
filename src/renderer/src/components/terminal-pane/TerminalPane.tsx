@@ -37,6 +37,7 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 // without re-entering the `slice → TerminalPane → store → slice` cycle
 // that otherwise leaves createTerminalSlice undefined at store-init time.
 import { shutdownBufferCaptures } from './shutdown-buffer-captures'
+import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 
 const MAX_BUFFER_BYTES = 512 * 1024
 
@@ -860,9 +861,14 @@ export default function TerminalPane({
       }
       const activePaneId = manager.getActivePane()?.id ?? panes[0]?.id ?? null
       const layout = serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current)
-      if (Object.keys(buffers).length > 0) {
-        layout.buffersByLeafId = buffers
-      }
+      // Why: setTabLayout REPLACES — it doesn't merge. captureBuffers can
+      // run during a transient window (post-remount, just-attached,
+      // mid-replay) where xterm hasn't rendered yet so serialize returns 0
+      // bytes. Without preservation, that empty pass would wipe a known-good
+      // buffer. Merge prior state in for leaves whose live capture came back
+      // empty. Same shape as persistLayoutSnapshot.
+      const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
+      const currentLeafIds = new Set(panes.map((p) => paneLeafId(p.id)))
       const ptyEntries = panes
         .map(
           (pane) =>
@@ -872,8 +878,21 @@ export default function TerminalPane({
             ] as const
         )
         .filter((entry): entry is readonly [string, string] => entry[1] !== null)
-      if (ptyEntries.length > 0) {
-        layout.ptyIdsByLeafId = Object.fromEntries(ptyEntries)
+      const mergedBuffers = mergeCapturedLeafState({
+        prior: existing?.buffersByLeafId,
+        fresh: buffers,
+        currentLeafIds
+      })
+      const mergedPtyIds = mergeCapturedLeafState({
+        prior: existing?.ptyIdsByLeafId,
+        fresh: Object.fromEntries(ptyEntries),
+        currentLeafIds
+      })
+      if (Object.keys(mergedBuffers).length > 0) {
+        layout.buffersByLeafId = mergedBuffers
+      }
+      if (Object.keys(mergedPtyIds).length > 0) {
+        layout.ptyIdsByLeafId = mergedPtyIds
       }
       // Merge pane titles so the shutdown snapshot doesn't silently drop them.
       // Why: the old early-return on empty buffers skipped this entirely, which
