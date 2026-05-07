@@ -88,6 +88,18 @@ export function connect(
   let activityProbeTimer: ReturnType<typeof setInterval> | null = null
   let intentionallyClosed = false
   let lastConnectedAt: number | null = null
+  // Why: diagnostic — when the rpc-client gets stuck in a state where every
+  // openConnection fails with code 1006 and only a force-quit recovers, we
+  // need to see whether (a) the new attempts even differ from the old ones,
+  // (b) anything is happening at the OS / RN-bridge layer between attempts,
+  // and (c) what the timing pattern is (instant 1006 = port closed / route
+  // dead, slow 1006 = packet drop / timeout). These three timestamps + the
+  // ws-construction counter are the cheapest visibility into RN/OkHttp
+  // process-state poisoning hypotheses.
+  let lastInboundAt: number | null = null
+  let lastWsClosedAt: number | null = null
+  let wsConstructionCounter = 0
+  let currentWsOpenedAt: number | null = null
 
   // Why: fresh ephemeral keypair per connection provides forward secrecy.
   // The shared key is derived from our ephemeral secret + server's static public key.
@@ -160,13 +172,25 @@ export function connect(
   function openConnection() {
     if (intentionallyClosed) return
 
+    const now = Date.now()
+    wsConstructionCounter++
     console.log('[net] openConnection', {
       attempt: reconnectAttempt,
-      endpoint: redactedEndpoint(endpoint)
+      endpoint: redactedEndpoint(endpoint),
+      // Why: process-poisoning diagnostic. If wsCount is high (e.g. >50)
+      // and every recent open fails with 1006, suspect RN/OkHttp internal
+      // pool corruption that only force-quit clears. Compare msSinceLast*
+      // values to the failure cadence: instant repeated fails with no
+      // inbound traffic between them = process-state stuck.
+      wsCount: wsConstructionCounter,
+      msSinceLastConnected: lastConnectedAt != null ? now - lastConnectedAt : null,
+      msSinceLastClose: lastWsClosedAt != null ? now - lastWsClosedAt : null,
+      msSinceLastInbound: lastInboundAt != null ? now - lastInboundAt : null
     })
     setState('connecting')
     sharedKey = null
 
+    currentWsOpenedAt = now
     ws = new WebSocket(endpoint)
     const openingWs = ws
 
@@ -215,6 +239,9 @@ export function connect(
     }
 
     ws.onmessage = (event) => {
+      // Why: track last-inbound for the openConnection diagnostic. Server
+      // pongs and stream events both bump this — anything from the wire.
+      lastInboundAt = Date.now()
       const raw = typeof event.data === 'string' ? event.data : String(event.data)
 
       // Why: during handshaking, e2ee_ready is plaintext because it precedes
@@ -335,6 +362,45 @@ export function connect(
 
     ws.onclose = (event) => {
       const e = event as { code?: number; reason?: string; wasClean?: boolean } | undefined
+      const closeAt = Date.now()
+      // Why: time-since-construct distinguishes failure modes. Instant
+      // close (<300ms) = TCP RST / port closed / route unreachable / RN
+      // synchronous reject. Mid (300ms–3s) = DNS/connect attempt + reset.
+      // Slow (>3s) = TCP SYN timeout / packet loss / NAT wedge. If an
+      // entire reconnect burst is all instant, the problem is local
+      // process state or routing, not packet loss.
+      const constructToCloseMs = currentWsOpenedAt != null ? closeAt - currentWsOpenedAt : null
+      const aliveMs =
+        currentWsOpenedAt != null && state === 'connected' ? closeAt - currentWsOpenedAt : null
+      const inboundIdleMs = lastInboundAt != null ? closeAt - lastInboundAt : null
+      // Why: inline the diagnostic dump. Earlier hot-reload tripped
+      // `Property 'enumKeys' doesn't exist` because a stale closure
+      // captured a half-loaded module. Inlining keeps the handler's
+      // behavior fully decided at construction time.
+      let closeEventKeys: string[] = []
+      let closeEventStr = ''
+      try {
+        closeEventKeys = event && typeof event === 'object' ? Object.keys(event as object) : []
+      } catch {
+        closeEventKeys = []
+      }
+      try {
+        const seen = new WeakSet<object>()
+        closeEventStr = JSON.stringify(
+          event,
+          (_k, v) => {
+            if (typeof v === 'object' && v !== null) {
+              if (seen.has(v as object)) return '[circular]'
+              seen.add(v as object)
+            }
+            if (typeof v === 'function') return '[fn]'
+            return v
+          },
+          0
+        ).slice(0, 500)
+      } catch {
+        closeEventStr = '[unstringifiable]'
+      }
       console.log('[net] ws.onclose', {
         code: e?.code,
         reason: e?.reason,
@@ -342,8 +408,15 @@ export function connect(
         state,
         attempt: reconnectAttempt,
         intentionallyClosed,
-        endpoint: redactedEndpoint(endpoint)
+        endpoint: redactedEndpoint(endpoint),
+        constructToCloseMs,
+        aliveMs,
+        inboundIdleMs,
+        eventKeys: closeEventKeys,
+        eventStr: closeEventStr
       })
+      lastWsClosedAt = closeAt
+      currentWsOpenedAt = null
       handleSocketClosed(openingWs)
     }
 
@@ -352,10 +425,37 @@ export function connect(
       // onclose fires right after, but logging the error message gives us
       // the original cause that the close code alone can hide.
       const e = event as { message?: string } | undefined
+      // Why: inlined defensively — see ws.onclose comment.
+      let errEventKeys: string[] = []
+      let errEventStr = ''
+      try {
+        errEventKeys = event && typeof event === 'object' ? Object.keys(event as object) : []
+      } catch {
+        errEventKeys = []
+      }
+      try {
+        const seen = new WeakSet<object>()
+        errEventStr = JSON.stringify(
+          event,
+          (_k, v) => {
+            if (typeof v === 'object' && v !== null) {
+              if (seen.has(v as object)) return '[circular]'
+              seen.add(v as object)
+            }
+            if (typeof v === 'function') return '[fn]'
+            return v
+          },
+          0
+        ).slice(0, 500)
+      } catch {
+        errEventStr = '[unstringifiable]'
+      }
       console.log('[net] ws.onerror', {
         message: e?.message,
         state,
-        attempt: reconnectAttempt
+        attempt: reconnectAttempt,
+        eventKeys: errEventKeys,
+        eventStr: errEventStr
       })
     }
   }

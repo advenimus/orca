@@ -38,7 +38,6 @@ import {
 } from '../../../src/transport/client-context'
 import {
   classifyConnection,
-  unreachableHint,
   type ConnectionVerdict
 } from '../../../src/transport/connection-health'
 import type { RpcSuccess } from '../../../src/transport/types'
@@ -691,42 +690,45 @@ export default function HostScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <ChevronLeft size={22} color={colors.textPrimary} />
           </Pressable>
-          <View style={styles.hostIdentity}>
-            <StatusDot state={connState} />
-            <Text style={styles.hostNameText} numberOfLines={1}>
-              {hostName || 'Host'}
-            </Text>
-          </View>
-          {connState !== 'connected' &&
-            (() => {
-              const verdict = classifyConnection({
-                state: connState,
-                reconnectAttempts,
-                lastConnectedAt
-              })
-              const isError = isErrorVerdict(verdict)
-              const showReconnectButton =
-                isError &&
-                hostId &&
-                verdict.kind !== 'auth-failed' &&
-                verdict.kind !== 'unreachable'
-              return (
-                <View style={styles.statusRow}>
-                  <Text style={[styles.statusText, isError && { color: colors.statusRed }]}>
-                    {verdict.label}
+          {(() => {
+            const headerVerdict = classifyConnection({
+              state: connState,
+              reconnectAttempts,
+              lastConnectedAt
+            })
+            return (
+              <>
+                <View style={styles.hostIdentity}>
+                  <StatusDot state={connState} verdict={headerVerdict} />
+                  <Text style={styles.hostNameText} numberOfLines={1}>
+                    {hostName || 'Host'}
                   </Text>
-                  {showReconnectButton && (
-                    <Pressable
-                      style={styles.reconnectButton}
-                      onPress={() => void forceReconnectHost(hostId!)}
-                      hitSlop={8}
-                    >
-                      <Text style={styles.reconnectButtonText}>Reconnect</Text>
-                    </Pressable>
-                  )}
                 </View>
-              )
-            })()}
+                {connState !== 'connected' &&
+                  (() => {
+                    // Why: status label removed in favor of just the dot +
+                    // Reconnect button — the home screen already surfaces the
+                    // verdict text per host, and the dot color already
+                    // signals severity here. Auth-failed routes through its
+                    // dedicated banner so we still want to suppress the
+                    // Reconnect button for that case.
+                    const verdict = headerVerdict
+                    const isError = isErrorVerdict(verdict)
+                    const showReconnectButton = isError && hostId && verdict.kind !== 'auth-failed'
+                    if (!showReconnectButton) return null
+                    return (
+                      <Pressable
+                        style={styles.reconnectButton}
+                        onPress={() => void forceReconnectHost(hostId!)}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.reconnectButtonText}>Reconnect</Text>
+                      </Pressable>
+                    )
+                  })()}
+              </>
+            )
+          })()}
         </View>
 
         {/* Filter/sort/group toolbar */}
@@ -810,41 +812,6 @@ export default function HostScreen() {
           </View>
         </View>
       )}
-
-      {/* Unreachable banner: surfaces the "host moved / network changed"
-          case after enough hard-fail reconnects. We keep retrying in the
-          background, but the user gets an actionable affordance instead
-          of an indefinite "Reconnecting…". */}
-      {connState !== 'auth-failed' &&
-        (() => {
-          const verdict = classifyConnection({
-            state: connState,
-            reconnectAttempts,
-            lastConnectedAt
-          })
-          if (verdict.kind !== 'unreachable') return null
-          return (
-            <View style={styles.authBanner}>
-              <Text style={styles.authBannerText}>{unreachableHint(verdict.reason)}</Text>
-              <View style={styles.authActions}>
-                <Pressable style={styles.authAction} onPress={() => router.push('/pair-scan')}>
-                  <Text style={styles.authActionText}>Re-pair</Text>
-                </Pressable>
-                {hostId && (
-                  <Pressable
-                    style={styles.authAction}
-                    onPress={() => void forceReconnectHost(hostId)}
-                  >
-                    <Text style={styles.authActionText}>Retry</Text>
-                  </Pressable>
-                )}
-                <Pressable style={styles.authAction} onPress={() => setConfirmRemoveHost(true)}>
-                  <Text style={[styles.authActionText, { color: colors.statusRed }]}>Remove</Text>
-                </Pressable>
-              </View>
-            </View>
-          )
-        })()}
 
       {/* Search bar */}
       {showSearch && (
@@ -1211,15 +1178,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.textPrimary
-  },
-  statusText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
   },
   reconnectButton: {
     paddingVertical: 4,

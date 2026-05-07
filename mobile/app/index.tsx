@@ -446,22 +446,18 @@ export default function HomeScreen() {
   // tap target is still the same and a fresher snapshot from the live RPC
   // overwrites the card's contents in place when it lands.
   const resumeWorktree = useMemo(() => {
-    if (lastVisited && sortedHosts.some((h) => h.id === lastVisited.hostId)) {
+    // Why: only surface Resume for hosts that are currently connected.
+    // Showing a stale cached worktree for a disconnected host is
+    // misleading — the user would tap into a session route that can't
+    // load anything until the host reconnects. Once the host reconnects,
+    // the card reappears with fresh data.
+    if (lastVisited && hostStates[lastVisited.hostId] === 'connected') {
       const cached = getCachedWorktrees(lastVisited.hostId) as WorktreeSummary[] | null
       const match = cached?.find((w) => w.worktreeId === lastVisited.worktreeId)
       if (match) return { hostId: lastVisited.hostId, worktree: match }
     }
-    // Prefer a currently-connected host's data when we have it.
     for (const host of sortedHosts) {
       if (hostStates[host.id] !== 'connected') continue
-      const info = worktreeInfo[host.id]
-      if (info?.lastActiveWorktree) {
-        return { hostId: host.id, worktree: info.lastActiveWorktree }
-      }
-    }
-    // Fall back to whichever known host has cached data, regardless of
-    // current connection state.
-    for (const host of sortedHosts) {
       const info = worktreeInfo[host.id]
       if (info?.lastActiveWorktree) {
         return { hostId: host.id, worktree: info.lastActiveWorktree }
@@ -470,28 +466,13 @@ export default function HomeScreen() {
     return null
   }, [sortedHosts, hostStates, worktreeInfo, lastVisited])
 
-  const resumeLoading = useMemo(
-    () =>
-      sortedHosts.some((host) => {
-        const state = hostStates[host.id] ?? 'connecting'
-        return (
-          state === 'connecting' ||
-          state === 'handshaking' ||
-          state === 'reconnecting' ||
-          (state === 'connected' && !worktreeInfo[host.id])
-        )
-      }),
-    [sortedHosts, hostStates, worktreeInfo]
-  )
-
-  // Why: only show the Account usage section for hosts that have at least
-  // one Claude or Codex account configured. Render whenever cached data
-  // exists, regardless of current connection state, so the cards don't
-  // disappear for ~1s on resume while the WebSocket reconnects. Streamed
-  // updates from the live RPC overwrite the snapshot in place when ready.
+  // Why: only show the Account usage section for hosts that are currently
+  // connected. Showing stale cached usage for a disconnected host implies
+  // live data; better to hide until the host reconnects and we can refresh.
   const accountsHosts = useMemo(() => {
     const items: Array<{ host: HostProfile; snapshot: AccountsSnapshot }> = []
     for (const host of sortedHosts) {
+      if (hostStates[host.id] !== 'connected') continue
       const snap = accountsByHost[host.id]
       if (!snap) continue
       const hasClaude = snap.claude.accounts.length > 0
@@ -660,7 +641,7 @@ export default function HomeScreen() {
                     {item.name}
                   </Text>
                   <View style={styles.hostMeta}>
-                    <StatusDot state={state} />
+                    <StatusDot state={state} verdict={verdict} />
                     <Text style={[styles.hostMetaItem, isError && { color: colors.statusRed }]}>
                       {verdict.label}
                       {connected && info
@@ -710,17 +691,6 @@ export default function HomeScreen() {
                     </View>
                     <ChevronRight size={16} color={colors.textMuted} />
                   </Pressable>
-                </>
-              ) : hosts.length > 0 && resumeLoading ? (
-                <>
-                  <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Resume</Text>
-                  <View style={styles.resumeCard}>
-                    <View style={[styles.resumeIcon, styles.skeletonBlock]} />
-                    <View style={styles.resumeMain}>
-                      <View style={[styles.skeletonLine, { width: '55%' }]} />
-                      <View style={[styles.skeletonLine, { width: '35%', marginTop: 6 }]} />
-                    </View>
-                  </View>
                 </>
               ) : null}
 
@@ -1196,18 +1166,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     marginTop: 4
-  },
-
-  /* ─── Skeleton ─── */
-  skeletonBlock: {
-    backgroundColor: colors.bgRaised,
-    opacity: 0.5
-  },
-  skeletonLine: {
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: colors.bgRaised,
-    opacity: 0.5
   },
 
   /* ─── Quick actions ─── */
