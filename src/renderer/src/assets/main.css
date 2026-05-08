@@ -1125,6 +1125,36 @@
   letter-spacing: 0.03em;
 }
 
+/* Why: keep edit + delete close together but visually distinct from the meta
+   label. Both share the same subtle button styling; only delete recolours on
+   hover (destructive intent). */
+.orca-diff-comment-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.orca-diff-comment-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.orca-diff-comment-edit:hover {
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
 /* Why: the trash button is always visible (not hover-only) because the saved
    note is a persistent, action-bearing card — users should be able to see and
    target the delete affordance without guessing that hovering reveals it.

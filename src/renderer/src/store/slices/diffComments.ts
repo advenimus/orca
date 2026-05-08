@@ -6,6 +6,7 @@ import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
   addDiffComment: (input: Omit<DiffComment, 'id' | 'createdAt'>) => Promise<DiffComment | null>
+  updateDiffComment: (worktreeId: string, commentId: string, body: string) => Promise<boolean>
   deleteDiffComment: (worktreeId: string, commentId: string) => Promise<void>
 }
 
@@ -202,6 +203,42 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       // write is not possible here even though we queued in order.
       rollback(set, input.worktreeId, result.previous, result.next)
       return null
+    }
+  },
+
+  updateDiffComment: async (worktreeId, commentId, body) => {
+    // Why: trim trailing whitespace but reject an entirely-empty edit so we
+    // don't end up with a saved note that renders as a blank card. Callers
+    // should treat `false` as "edit not committed" and keep the editor open
+    // so the user can either type more or cancel explicitly.
+    const trimmed = body.trim()
+    if (!trimmed) {
+      return false
+    }
+    const result = mutateComments(set, worktreeId, (existing) => {
+      const idx = existing.findIndex((c) => c.id === commentId)
+      if (idx === -1) {
+        return null
+      }
+      if (existing[idx].body === trimmed) {
+        return null
+      }
+      const next = existing.slice()
+      next[idx] = { ...existing[idx], body: trimmed }
+      return next
+    })
+    if (!result) {
+      // Why: no-op (id missing or body unchanged) — treat as success so the
+      // caller can close its editor without surfacing a spurious error.
+      return true
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return false
     }
   },
 
