@@ -247,12 +247,13 @@ export function DiffCommentCard({
               size="sm"
               onClick={() => void handleSubmit()}
               disabled={!canSubmit}
-              // Why: pin a min-width sized to fit "Saving…" so the brief
-              // submit-in-flight label swap doesn't shift button width and
-              // produce a visible jitter on fast (local-IPC) saves.
-              className="min-w-[68px]"
+              // Why: keep the label "Save" while submitting so the button
+              // doesn't change width mid-flight; the disabled state alone
+              // signals the in-flight save. The title attribute surfaces the
+              // status for assistive tech.
+              title={submitting ? 'Saving…' : undefined}
             >
-              {submitting ? 'Saving…' : 'Save'}
+              Save
             </Button>
           </div>
         </>
