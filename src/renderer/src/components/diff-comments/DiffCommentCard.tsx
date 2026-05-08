@@ -251,7 +251,7 @@ export function DiffCommentCard({
               title={submitting ? 'Saving…' : undefined}
             >
               Save
-              {!submitting && <CornerDownLeft className="ml-1 size-3 opacity-70" />}
+              <CornerDownLeft className="ml-1 size-3 opacity-70" />
             </Button>
           </div>
         </>
