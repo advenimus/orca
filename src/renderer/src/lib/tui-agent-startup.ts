@@ -171,15 +171,26 @@ export function buildAgentDraftLaunchPlan(args: {
     // Append a clear-var command so the var is unset from the shell env
     // once the agent exits — otherwise re-running the agent in the same
     // terminal would inherit the stale value and re-prefill with the old URL.
-    const clearVar =
-      platform === 'win32'
-        ? isPowerShellLike(windowsShell)
-          ? `Remove-Item Env:${config.draftPromptEnvVar} -ErrorAction SilentlyContinue`
-          : `set "${config.draftPromptEnvVar}="`
-        : `unset ${config.draftPromptEnvVar}`
+    // Why default-undefined→PowerShell on Windows: modern Windows installs
+    // (Win11 Terminal, many node-pty defaults) spawn PowerShell/pwsh, where
+    // `set "FOO="` is parsed as the `Set-Variable` alias and silently does
+    // not clear the env var. Defaulting to PowerShell syntax matches the
+    // common spawn shell when the user hasn't explicitly configured one.
+    const isWin = platform === 'win32'
+    const useCmdSyntax = isWin && windowsShell !== undefined && !isPowerShellLike(windowsShell)
+    const clearVar = isWin
+      ? useCmdSyntax
+        ? `set "${config.draftPromptEnvVar}="`
+        : `Remove-Item Env:${config.draftPromptEnvVar} -ErrorAction SilentlyContinue`
+      : `unset ${config.draftPromptEnvVar}`
+    // Why: cmd.exe does not treat `;` as a statement separator — it parses
+    // the trailing tokens as literal arguments to the agent and never runs
+    // the clear-var. Use `&` for cmd.exe; `;` is valid in PowerShell and
+    // POSIX shells.
+    const separator = useCmdSyntax ? ' & ' : '; '
     return {
       agent,
-      launchCommand: `${baseCommand}; ${clearVar}`,
+      launchCommand: `${baseCommand}${separator}${clearVar}`,
       expectedProcess: config.expectedProcess,
       env: { [config.draftPromptEnvVar]: trimmed }
     }

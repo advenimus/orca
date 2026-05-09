@@ -205,7 +205,7 @@ describe('buildAgentDraftLaunchPlan', () => {
       })
     ).toEqual({
       agent: 'pi',
-      launchCommand: 'pi; set "ORCA_PI_PREFILL="',
+      launchCommand: 'pi & set "ORCA_PI_PREFILL="',
       expectedProcess: 'pi',
       env: { ORCA_PI_PREFILL: 'https://github.com/acme/repo/issues/42' }
     })
