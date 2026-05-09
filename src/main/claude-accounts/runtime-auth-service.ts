@@ -30,6 +30,10 @@ type ClaudeSystemDefaultSnapshot = {
   capturedAt: number
 }
 
+type ClaudeAuthIdentity = {
+  email: string | null
+}
+
 export class ClaudeRuntimeAuthService {
   private readonly pathResolver = new ClaudeRuntimePathResolver()
   private mutationQueue: Promise<unknown> = Promise.resolve()
@@ -110,7 +114,7 @@ export class ClaudeRuntimeAuthService {
 
     await this.captureSystemDefaultSnapshotIfNeeded()
 
-    const credentialsJson = await this.readManagedCredentials(activeAccount)
+    let credentialsJson = await this.readManagedCredentials(activeAccount)
     if (!credentialsJson) {
       console.warn(
         '[claude-runtime-auth] Active managed account is missing credentials, restoring system default'
@@ -129,6 +133,7 @@ export class ClaudeRuntimeAuthService {
     // back to managed storage before overwriting runtime with managed state.
     if (this.lastSyncedAccountId === activeAccount.id) {
       await this.readBackRefreshedTokens(activeAccount)
+      credentialsJson = (await this.readManagedCredentials(activeAccount)) ?? credentialsJson
     }
 
     this.writeRuntimeCredentials(credentialsJson)
@@ -160,6 +165,10 @@ export class ClaudeRuntimeAuthService {
 
       const runtimeContents = readFileSync(paths.credentialsPath, 'utf-8')
       if (runtimeContents === this.lastWrittenCredentialsJson) {
+        return
+      }
+
+      if (!this.runtimeCredentialsMatchAccount(runtimeContents, account)) {
         return
       }
 
@@ -196,6 +205,58 @@ export class ClaudeRuntimeAuthService {
       return null
     }
     return accounts.find((account) => account.id === activeAccountId) ?? null
+  }
+
+  private runtimeCredentialsMatchAccount(
+    runtimeCredentialsJson: string,
+    account: ClaudeManagedAccount
+  ): boolean {
+    const identity = this.readIdentityFromCredentials(runtimeCredentialsJson)
+    if (!identity) {
+      return false
+    }
+
+    // Why: this mirrors the Codex runtime-home guard. If another Claude login
+    // or missed live process rewrites shared runtime credentials, do not
+    // persist those credentials into the selected managed account.
+    if (account.email && identity.email && this.normalizeField(account.email) !== identity.email) {
+      return false
+    }
+
+    return Boolean(identity.email)
+  }
+
+  private readIdentityFromCredentials(credentialsJson: string): ClaudeAuthIdentity | null {
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(credentialsJson) as Record<string, unknown>
+    } catch {
+      return null
+    }
+    const oauth = this.asRecord(parsed.claudeAiOauth)
+    return {
+      email: this.normalizeField(this.readString(oauth, 'email'))
+    }
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null
+    }
+    return value as Record<string, unknown>
+  }
+
+  private readString(value: Record<string, unknown> | null, key: string): string | null {
+    const candidate = value?.[key]
+    return typeof candidate === 'string' ? candidate : null
+  }
+
+  private normalizeField(value: string | null | undefined): string | null {
+    if (!value) {
+      return null
+    }
+    const trimmed = value.trim()
+    return trimmed === '' ? null : trimmed
   }
 
   private async readManagedCredentials(account: ClaudeManagedAccount): Promise<string | null> {
@@ -316,7 +377,12 @@ export class ClaudeRuntimeAuthService {
     mkdirSync(dirname(credentialsPath), { recursive: true })
     // Why: repeated Claude spawns sync auth, but credentials rarely change.
     // Skipping unchanged rewrites avoids Windows EPERM contention in #1507.
-    if (this.lastWrittenCredentialsJson === contents && existsSync(credentialsPath)) {
+    // Still verify the file because another Claude process may have rewritten
+    // runtime credentials since Orca last materialized them.
+    if (
+      this.lastWrittenCredentialsJson === contents &&
+      this.fileContentsEqual(credentialsPath, contents)
+    ) {
       return
     }
     if (this.fileContentsEqual(credentialsPath, contents)) {
