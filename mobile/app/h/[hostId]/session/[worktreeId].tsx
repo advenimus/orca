@@ -206,7 +206,6 @@ function TerminalPaneView({
 
 function MarkdownReader({
   doc,
-  tab,
   onRefresh,
   onChange,
   onSave,
@@ -214,7 +213,6 @@ function MarkdownReader({
   onDiscard
 }: {
   doc: MarkdownDocState | undefined
-  tab: Extract<MobileSessionTab, { type: 'markdown' }>
   onRefresh: () => void
   onChange: (content: string) => void
   onSave: () => void
@@ -240,60 +238,22 @@ function MarkdownReader({
     )
   }
 
+  const statusText = doc.saveError
+    ? doc.saveError
+    : doc.readOnlyReason
+      ? 'Read only'
+      : doc.stale
+        ? 'Changed on desktop'
+        : doc.isDirty
+          ? 'Unsaved on phone'
+          : null
+  const showRefresh = (doc.stale && !doc.isDirty) || !doc.editable
+  const showCopy = doc.saveError || !doc.editable
+  const showSave = doc.isDirty || doc.saving
+  const showFloatingActions = statusText || showRefresh || showCopy || showSave
+
   return (
     <View style={styles.markdownEditor}>
-      <View style={styles.markdownHeader}>
-        <View style={styles.markdownTitleRow}>
-          <View style={styles.markdownTitleBlock}>
-            <Text style={styles.markdownTitle} numberOfLines={1}>
-              {tab.relativePath || tab.title}
-            </Text>
-            {doc.saveError ? (
-              <Text style={styles.markdownError} numberOfLines={2}>
-                {doc.saveError}
-              </Text>
-            ) : doc.readOnlyReason ? (
-              <Text style={styles.markdownMeta}>Read only</Text>
-            ) : doc.stale ? (
-              <Text style={styles.markdownMeta}>Changed on desktop</Text>
-            ) : doc.isDirty ? (
-              <Text style={styles.markdownMeta}>Unsaved on phone</Text>
-            ) : null}
-          </View>
-          <View style={styles.markdownActions}>
-            {(doc.saveError || !doc.editable) && (
-              <Pressable style={styles.markdownRefreshButton} onPress={onCopy}>
-                <Text style={styles.markdownRefreshText}>Copy</Text>
-              </Pressable>
-            )}
-            {doc.isDirty && (
-              <Pressable style={styles.markdownRefreshButton} onPress={onDiscard}>
-                <Text style={styles.markdownRefreshText}>Discard</Text>
-              </Pressable>
-            )}
-            <Pressable
-              style={[
-                styles.markdownRefreshButton,
-                (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled
-              ]}
-              disabled={!doc.editable || !doc.isDirty || doc.saving}
-              onPress={onSave}
-            >
-              {doc.saving ? (
-                <ActivityIndicator size="small" color={colors.textPrimary} />
-              ) : (
-                <Text style={styles.markdownRefreshText}>Save</Text>
-              )}
-            </Pressable>
-          </View>
-        </View>
-        {(doc.stale && !doc.isDirty) || !doc.editable ? (
-          <Pressable style={styles.markdownRefreshButton} onPress={onRefresh}>
-            <RefreshCw size={14} color={colors.textPrimary} />
-            <Text style={styles.markdownRefreshText}>Refresh</Text>
-          </Pressable>
-        ) : null}
-      </View>
       <TextInput
         style={styles.markdownTextInput}
         value={doc.localContent}
@@ -305,6 +265,53 @@ function MarkdownReader({
         autoCorrect={false}
         spellCheck={false}
       />
+      {showFloatingActions ? (
+        <View pointerEvents="box-none" style={styles.markdownFloatingBar}>
+          {statusText ? (
+            <Text
+              style={[styles.markdownFloatingStatus, doc.saveError ? styles.markdownError : null]}
+              numberOfLines={2}
+            >
+              {statusText}
+            </Text>
+          ) : null}
+          <View style={styles.markdownFloatingActions}>
+            {showCopy ? (
+              <Pressable style={styles.markdownFloatingButton} onPress={onCopy}>
+                <Text style={styles.markdownFloatingButtonText}>Copy</Text>
+              </Pressable>
+            ) : null}
+            {showRefresh ? (
+              <Pressable style={styles.markdownFloatingButton} onPress={onRefresh}>
+                <RefreshCw size={13} color={colors.textPrimary} />
+                <Text style={styles.markdownFloatingButtonText}>Refresh</Text>
+              </Pressable>
+            ) : null}
+            {doc.isDirty ? (
+              <Pressable style={styles.markdownFloatingButton} onPress={onDiscard}>
+                <Text style={styles.markdownFloatingButtonText}>Discard</Text>
+              </Pressable>
+            ) : null}
+            {showSave ? (
+              <Pressable
+                style={[
+                  styles.markdownFloatingButton,
+                  styles.markdownSaveButton,
+                  (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled
+                ]}
+                disabled={!doc.editable || !doc.isDirty || doc.saving}
+                onPress={onSave}
+              >
+                {doc.saving ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : (
+                  <Text style={styles.markdownFloatingButtonText}>Save</Text>
+                )}
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -1990,7 +1997,6 @@ export default function SessionScreen() {
         ) : activeMarkdownTab ? (
           <View style={[styles.markdownFrame, { paddingBottom: keyboardLift }]}>
             <MarkdownReader
-              tab={activeMarkdownTab}
               doc={markdownDocs.get(activeMarkdownTab.id)}
               onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
               onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
@@ -2440,71 +2446,9 @@ const styles = StyleSheet.create({
     minHeight: 0,
     backgroundColor: colors.bgBase
   },
-  markdownReader: {
-    flex: 1
-  },
   markdownEditor: {
     flex: 1,
-    padding: spacing.lg,
-    gap: spacing.md
-  },
-  markdownContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xl * 2
-  },
-  markdownHeader: {
-    gap: spacing.xs
-  },
-  markdownTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md
-  },
-  markdownTitleBlock: {
-    flex: 1,
-    minWidth: 0,
-    gap: spacing.xs
-  },
-  markdownActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    gap: spacing.xs,
-    maxWidth: '58%'
-  },
-  markdownTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  markdownMeta: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  markdownH1: {
-    color: colors.textPrimary,
-    fontSize: 22,
-    fontWeight: '700',
-    marginTop: spacing.md,
-    marginBottom: spacing.sm
-  },
-  markdownH2: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: spacing.md,
-    marginBottom: spacing.sm
-  },
-  markdownBody: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    lineHeight: 22,
-    marginBottom: spacing.xs
-  },
-  markdownSpacer: {
-    height: spacing.sm
+    position: 'relative'
   },
   markdownState: {
     flex: 1,
@@ -2521,11 +2465,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     color: colors.textPrimary,
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    padding: spacing.md,
+    backgroundColor: colors.bgBase,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl * 3,
     fontSize: typography.bodySize,
     lineHeight: 22,
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
@@ -2546,6 +2489,53 @@ const styles = StyleSheet.create({
     opacity: 0.45
   },
   markdownRefreshText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600'
+  },
+  markdownFloatingBar: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    bottom: spacing.md,
+    alignItems: 'flex-end',
+    gap: spacing.xs
+  },
+  markdownFloatingStatus: {
+    maxWidth: '100%',
+    alignSelf: 'flex-end',
+    overflow: 'hidden',
+    color: colors.textSecondary,
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.button,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    fontSize: typography.metaSize
+  },
+  markdownFloatingActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: spacing.xs
+  },
+  markdownFloatingButton: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.button,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs
+  },
+  markdownSaveButton: {
+    backgroundColor: colors.bgRaised
+  },
+  markdownFloatingButtonText: {
     color: colors.textPrimary,
     fontSize: 13,
     fontWeight: '600'
