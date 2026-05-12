@@ -209,7 +209,13 @@ export default function MobileFileExplorerScreen() {
             void openFile(item.relativePath, item.kind)
           }
         }}
-        accessibilityLabel={isDirectory ? `Open folder ${item.name}` : `Open file ${item.name}`}
+        accessibilityLabel={
+          isDirectory
+            ? `Open folder ${item.name}`
+            : disabled
+              ? `${item.name} unavailable on mobile`
+              : `Open file ${item.name}`
+        }
       >
         {isDirectory ? (
           isExpanded ? (
@@ -231,7 +237,7 @@ export default function MobileFileExplorerScreen() {
           <Text style={[styles.rowTitle, disabled && styles.rowTitleDisabled]} numberOfLines={1}>
             {item.name}
           </Text>
-          {disabled ? <Text style={styles.rowMeta}>Read-only on mobile</Text> : null}
+          {disabled ? <Text style={styles.rowMeta}>Unavailable on mobile</Text> : null}
         </View>
         {openingPath === item.relativePath ? (
           <ActivityIndicator size="small" color={colors.textSecondary} />
