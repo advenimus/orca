@@ -77,6 +77,7 @@ export function FloatingTerminalPanel({
   const [bounds, setBounds] = useState(() => getDefaultFloatingTerminalBounds())
   const [maximized, setMaximized] = useState(false)
   const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
+  const normalizedInitialBoundsRef = useRef(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{
     pointerId: number
@@ -88,6 +89,17 @@ export function FloatingTerminalPanel({
 
   const tabs = tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TERMINAL_TABS
   const activeTabId = activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? tabs[0]?.id ?? null
+
+  useEffect(() => {
+    if (!open || normalizedInitialBoundsRef.current || typeof window === 'undefined') {
+      return
+    }
+    normalizedInitialBoundsRef.current = true
+    const rightGap = window.innerWidth - bounds.left - bounds.width
+    if (rightGap > 160) {
+      setBounds(getDefaultFloatingTerminalBounds())
+    }
+  }, [bounds.left, bounds.width, open])
 
   useEffect(() => {
     void window.api.app

@@ -5,6 +5,8 @@ export const MIN_PANEL_HEIGHT = 280
 export const MAXIMIZED_MARGIN = 12
 export const MAXIMIZED_BOTTOM_GAP = 36
 export const MAC_TITLEBAR_SAFE_TOP = 44
+const DEFAULT_RIGHT_GAP = 24
+const DEFAULT_BOTTOM_GAP = 84
 
 export type FloatingTerminalPanelBounds = {
   left: number
@@ -19,8 +21,8 @@ export function getDefaultFloatingTerminalBounds(): FloatingTerminalPanelBounds 
   const width = Math.min(DEFAULT_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, viewportWidth - 48))
   const height = Math.min(DEFAULT_PANEL_HEIGHT, Math.max(MIN_PANEL_HEIGHT, viewportHeight - 96))
   return {
-    left: Math.max(16, viewportWidth - width - 24),
-    top: Math.max(40, viewportHeight - height - 40),
+    left: Math.max(16, viewportWidth - width - DEFAULT_RIGHT_GAP),
+    top: Math.max(40, viewportHeight - height - DEFAULT_BOTTOM_GAP),
     width,
     height
   }
