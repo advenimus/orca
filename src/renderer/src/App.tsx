@@ -49,6 +49,7 @@ import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
   getRuntimeMobileSessionSyncKey,
+  runtimeMobileSessionSyncKeysEqual,
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
@@ -435,6 +436,13 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
+      // Why: cheap reference-equality fast path. The relevant-fields gate must
+      // also include `terminalLayoutsByTabId` and `runtimePaneTitlesByTabId` —
+      // otherwise unrelated mutations (e.g. `updateTabTitle` reallocating
+      // `tabsByWorktree`) fall through to the key build, which used to do an
+      // O(N) JSON.stringify of those large maps and pinned the main thread for
+      // ~750ms per click in workspaces with hundreds of accumulated tabs. See
+      // docs/agent-working-pane-typing-lag.md.
       if (
         state.tabsByWorktree === previousState.tabsByWorktree &&
         state.groupsByWorktree === previousState.groupsByWorktree &&
@@ -445,12 +453,14 @@ function App(): React.JSX.Element {
         state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
         state.openFiles === previousState.openFiles &&
         state.editorDrafts === previousState.editorDrafts &&
-        state.activeTabId === previousState.activeTabId
+        state.activeTabId === previousState.activeTabId &&
+        state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
+        state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId
       ) {
         return
       }
       const nextKey = getRuntimeMobileSessionSyncKey(state)
-      if (nextKey === previousKey) {
+      if (runtimeMobileSessionSyncKeysEqual(nextKey, previousKey)) {
         return
       }
       previousKey = nextKey
