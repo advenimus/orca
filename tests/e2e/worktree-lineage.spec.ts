@@ -33,6 +33,9 @@ async function seedLineageScenario(page: Page): Promise<LineageScenario> {
     }
 
     const [parent, child] = worktrees
+    if (!parent.instanceId || !child.instanceId) {
+      throw new Error('Worktree lineage E2E needs instance-stamped worktrees')
+    }
     store.setState((current) => ({
       worktreesByRepo: Object.fromEntries(
         Object.entries(current.worktreesByRepo).map(([repoId, repoWorktrees]) => [
@@ -47,7 +50,19 @@ async function seedLineageScenario(page: Page): Promise<LineageScenario> {
             return worktree
           })
         ])
-      )
+      ),
+      worktreeLineageById: {
+        ...current.worktreeLineageById,
+        [child.id]: {
+          worktreeId: child.id,
+          worktreeInstanceId: child.instanceId,
+          parentWorktreeId: parent.id,
+          parentWorktreeInstanceId: parent.instanceId,
+          origin: 'manual',
+          capture: { source: 'manual-action', confidence: 'explicit' },
+          createdAt: Date.now()
+        }
+      }
     }))
 
     store.getState().setActiveWorktree(parent.id)
@@ -61,9 +76,7 @@ test.describe('Worktree Lineage', () => {
     await waitForActiveWorktree(orcaPage)
   })
 
-  test('groups a child under the active workspace from the sidebar context menu', async ({
-    orcaPage
-  }) => {
+  test('renders existing child lineage in the sidebar', async ({ orcaPage }) => {
     const { parentId, childId } = await seedLineageScenario(orcaPage)
     const parentRow = worktreeOption(orcaPage, parentId)
     const childRow = worktreeOption(orcaPage, childId)
@@ -73,9 +86,6 @@ test.describe('Worktree Lineage', () => {
     await expect(parentRow).toHaveAttribute('aria-current', 'page')
 
     await expect(childRow).toContainText('E2E lineage child')
-    await childRow.click({ button: 'right' })
-    await orcaPage.getByRole('menuitem', { name: 'Group under Active Workspace' }).click()
-
     const childToggle = parentRow.getByRole('button', { name: 'Hide 1 child workspace' })
     await expect(childToggle).toBeVisible({ timeout: 10_000 })
     await expect(childRow).toBeVisible()
@@ -102,5 +112,16 @@ test.describe('Worktree Lineage', () => {
     await childToggle.click()
     await expect(parentRow.getByRole('button', { name: 'Show 1 child workspace' })).toBeVisible()
     await expect(childRow).toBeHidden()
+
+    await parentRow.getByRole('button', { name: 'Show 1 child workspace' }).click()
+    await childRow.click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Remove from Parent' }).click()
+    await expect(parentRow.getByRole('button', { name: /child workspace/ })).toHaveCount(0)
+    await expect(childRow).toBeVisible()
+
+    await parentRow.click({ button: 'right' })
+    await expect(
+      orcaPage.getByRole('menuitem', { name: 'Group under Active Workspace' })
+    ).toHaveCount(0)
   })
 })

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+/* eslint-disable max-lines -- Why: this menu keeps row targeting, batch actions, and ctrl-click event guards together so nested worktree menus share one event policy. */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +43,30 @@ type Props = {
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
+const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
+
+function shouldIgnoreNestedWorktreeContextMenuScope(
+  currentTarget: EventTarget,
+  target: EventTarget | null
+): boolean {
+  const maybeScopedTarget = target as {
+    closest?: (selector: string) => Element | null
+    parentElement?: { closest?: (selector: string) => Element | null }
+  } | null
+  const scopeSelector = `[${WORKTREE_CONTEXT_MENU_SCOPE_ATTR}]`
+  const closestScope =
+    maybeScopedTarget?.closest?.(scopeSelector) ??
+    maybeScopedTarget?.parentElement?.closest?.(scopeSelector)
+  // Why: lineage child previews live inside the parent card DOM but own their
+  // context menu target. The parent must ignore only those nested scopes.
+  return closestScope != null && closestScope !== currentTarget
+}
+
+function shouldSuppressContextMenuFollowUpClick(contextMenuOpenedAt: number, now: number): boolean {
+  return (
+    now - contextMenuOpenedAt >= 0 && now - contextMenuOpenedAt <= CONTEXT_MENU_CLICK_SUPPRESSION_MS
+  )
+}
 
 const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
@@ -61,13 +86,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const isFolder = repo ? isFolderRepo(repo) : false
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
+  const contextMenuOpenedAtRef = useRef<number | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : selectedWorktrees
   const isMultiContext = activeContextWorktrees.length > 1
   const sleepableWorktrees = useMemo(
@@ -109,8 +134,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   )
   const validParentWorktreeId = lineageInfo.state === 'valid' ? lineageInfo.parent.id : null
   const hasAnyContextLineage = activeContextWorktrees.some((item) => worktreeLineageById[item.id])
-  const canGroupUnderActive =
-    activeWorktreeId != null && activeContextWorktrees.every((item) => item.id !== activeWorktreeId)
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -231,46 +254,53 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     }
   }, [validParentWorktreeId])
 
-  const handleGroupUnderActive = useCallback(() => {
-    if (!activeWorktreeId) {
-      return
-    }
-    void Promise.all(
-      activeContextWorktrees.map((item) =>
-        updateWorktreeLineage(item.id, { parentWorktreeId: activeWorktreeId })
-      )
-    )
-  }, [activeContextWorktrees, activeWorktreeId, updateWorktreeLineage])
-
   const handleRemoveParentLink = useCallback(() => {
     void Promise.all(
       activeContextWorktrees.map((item) => updateWorktreeLineage(item.id, { noParent: true }))
     )
   }, [activeContextWorktrees, updateWorktreeLineage])
 
-  return (
-    <>
-      <div
-        className="relative"
-        onContextMenuCapture={(event) => {
-          const target = event.target
-          if (
-            target instanceof Element &&
-            target.closest(`[${WORKTREE_CONTEXT_MENU_SCOPE_ATTR}]`)
-          ) {
-            return
-          }
-          event.preventDefault()
-          window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-          setContextWorktrees(onContextMenuSelect?.(event) ?? selectedWorktrees)
-          const bounds = event.currentTarget.getBoundingClientRect()
-          setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
-          setMenuOpen(true)
-        }}
-      >
-        {children}
-      </div>
+  const suppressOpeningPointerEvent = useCallback((event: React.SyntheticEvent) => {
+    const contextMenuOpenedAt = contextMenuOpenedAtRef.current
+    if (
+      contextMenuOpenedAt == null ||
+      !shouldSuppressContextMenuFollowUpClick(contextMenuOpenedAt, Date.now())
+    ) {
+      if (contextMenuOpenedAt != null) {
+        contextMenuOpenedAtRef.current = null
+      }
+      return
+    }
+    // Why: macOS ctrl-click can release over the just-opened menu, selecting
+    // the item under the cursor unless the opening pointer sequence is ignored.
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.type === 'click') {
+      contextMenuOpenedAtRef.current = null
+    }
+  }, [])
 
+  return (
+    <div
+      className="relative"
+      {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'worktree' }}
+      onContextMenuCapture={(event) => {
+        if (shouldIgnoreNestedWorktreeContextMenuScope(event.currentTarget, event.target)) {
+          return
+        }
+        event.preventDefault()
+        contextMenuOpenedAtRef.current = Date.now()
+        window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+        setContextWorktrees(onContextMenuSelect?.(event) ?? selectedWorktrees)
+        const bounds = event.currentTarget.getBoundingClientRect()
+        setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+        setMenuOpen(true)
+      }}
+      onClickCapture={(event) => {
+        suppressOpeningPointerEvent(event)
+      }}
+    >
+      {children}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
         <DropdownMenuTrigger asChild>
           <button
@@ -280,7 +310,14 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             style={{ left: menuPoint.x, top: menuPoint.y }}
           />
         </DropdownMenuTrigger>
-        <DropdownMenuContent className={cn('w-52', contentClassName)} sideOffset={0} align="start">
+        <DropdownMenuContent
+          className={cn('w-52', contentClassName)}
+          sideOffset={0}
+          align="start"
+          onPointerUpCapture={suppressOpeningPointerEvent}
+          onMouseUpCapture={suppressOpeningPointerEvent}
+          onClickCapture={suppressOpeningPointerEvent}
+        >
           {!isMultiContext && (
             <>
               <DropdownMenuItem onSelect={handleOpenInFinder} disabled={isDeleting}>
@@ -324,17 +361,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 <Workflow className="size-3.5" />
                 Open Parent Workspace
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={handleGroupUnderActive}
-                disabled={isDeleting || !canGroupUnderActive}
-              >
-                <Workflow className="size-3.5" />
-                Group under Active Workspace
-              </DropdownMenuItem>
               {lineage && (
                 <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={isDeleting}>
                   <Unlink className="size-3.5" />
-                  Remove Parent Link
+                  Remove from Parent
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
@@ -342,17 +372,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           )}
           {isMultiContext && (
             <>
-              <DropdownMenuItem
-                onSelect={handleGroupUnderActive}
-                disabled={deletingContext || !canGroupUnderActive}
-              >
-                <Workflow className="size-3.5" />
-                Group under Active Workspace
-              </DropdownMenuItem>
               {hasAnyContextLineage && (
                 <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={deletingContext}>
                   <Unlink className="size-3.5" />
-                  Remove Parent Links
+                  Remove from Parent
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
@@ -403,9 +426,14 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </>
+    </div>
   )
 })
 
 export default WorktreeContextMenu
-export { CLOSE_ALL_CONTEXT_MENUS_EVENT, WORKTREE_CONTEXT_MENU_SCOPE_ATTR }
+export {
+  CLOSE_ALL_CONTEXT_MENUS_EVENT,
+  WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
+  shouldSuppressContextMenuFollowUpClick,
+  shouldIgnoreNestedWorktreeContextMenuScope
+}
