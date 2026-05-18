@@ -6,6 +6,14 @@
  */
 
 import { test, expect } from './helpers/orca-app'
+import type { Page } from '@stablyai/playwright-test'
+import { rmSync } from 'node:fs'
+import {
+  createHttpFixturePage,
+  createLocalBrowserFixture,
+  executeInBrowserGuest,
+  getBrowserGuestUrl
+} from './helpers/browser-guest-fixtures'
 import {
   waitForSessionReady,
   waitForActiveWorktree,
@@ -18,22 +26,26 @@ import {
   ensureTerminalVisible
 } from './helpers/store'
 
-async function createBrowserTab(
-  page: Parameters<typeof getActiveWorktreeId>[0],
-  worktreeId: string
-): Promise<void> {
-  await page.evaluate((targetWorktreeId) => {
-    const store = window.__store
-    if (!store) {
-      return
-    }
+async function createBrowserTab(page: Page, worktreeId: string, url?: string): Promise<void> {
+  await page.evaluate(
+    ({ targetWorktreeId, targetUrl }) => {
+      const store = window.__store
+      if (!store) {
+        return
+      }
 
-    const state = store.getState()
-    state.createBrowserTab(targetWorktreeId, state.browserDefaultUrl ?? 'about:blank', {
-      title: 'New Browser Tab',
-      activate: true
-    })
-  }, worktreeId)
+      const state = store.getState()
+      state.createBrowserTab(
+        targetWorktreeId,
+        targetUrl ?? state.browserDefaultUrl ?? 'about:blank',
+        {
+          title: 'New Browser Tab',
+          activate: true
+        }
+      )
+    },
+    { targetWorktreeId: worktreeId, targetUrl: url }
+  )
 }
 
 async function switchToTerminalTab(
@@ -190,5 +202,89 @@ test.describe('Browser Tab', () => {
     // Browser tabs should still be preserved
     const browserTabsAfter = await getBrowserTabs(orcaPage, worktreeId)
     expect(browserTabsAfter.length).toBe(browserTabsBefore.length)
+  })
+
+  test('local file preview links navigate inside the embedded browser', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    const fixture = createLocalBrowserFixture()
+    try {
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
+      await createBrowserTab(orcaPage, worktreeId, fixture.indexUrl)
+      await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
+
+      await expect
+        .poll(async () => getBrowserGuestUrl(electronApp, orcaPage), {
+          timeout: 10_000,
+          message: 'Browser guest did not load the local index page'
+        })
+        .toBe(fixture.indexUrl)
+
+      await executeInBrowserGuest<void>(
+        electronApp,
+        orcaPage,
+        `document.querySelector('#go')?.click()`
+      )
+
+      await expect
+        .poll(async () => getBrowserGuestUrl(electronApp, orcaPage), {
+          timeout: 10_000,
+          message: 'Clicking a local preview link did not navigate to the linked file'
+        })
+        .toBe(fixture.targetUrl)
+      await expect
+        .poll(
+          async () =>
+            executeInBrowserGuest<string>(
+              electronApp,
+              orcaPage,
+              `document.querySelector('main')?.textContent ?? ''`
+            ),
+          { timeout: 5_000 }
+        )
+        .toContain('Reached target')
+    } finally {
+      rmSync(fixture.dir, { recursive: true, force: true })
+    }
+  })
+
+  test('remote pages are still blocked from navigating the embedded browser to local files', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    const fixture = createLocalBrowserFixture()
+    const remote = await createHttpFixturePage(fixture.targetUrl)
+    try {
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
+      await createBrowserTab(orcaPage, worktreeId, remote.url)
+      await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
+      await expect
+        .poll(async () => getBrowserGuestUrl(electronApp, orcaPage), {
+          timeout: 10_000,
+          message: 'Browser guest did not load the remote fixture page'
+        })
+        .toBe(remote.url)
+
+      await executeInBrowserGuest<void>(
+        electronApp,
+        orcaPage,
+        `document.querySelector('#go')?.click()`
+      )
+
+      // Why: this is the original security purpose of the file-navigation
+      // guard. A remote page may render a file:// link, but clicking it must
+      // not move the guest into the user's local filesystem.
+      await orcaPage.waitForTimeout(750)
+      expect(await getBrowserGuestUrl(electronApp, orcaPage)).toBe(remote.url)
+      expect(await executeInBrowserGuest<string>(electronApp, orcaPage, `document.title`)).toBe(
+        'Remote Page'
+      )
+    } finally {
+      await remote.close()
+      rmSync(fixture.dir, { recursive: true, force: true })
+    }
   })
 })

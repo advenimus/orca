@@ -131,6 +131,53 @@ describe('browserManager', () => {
     })
   })
 
+  it('blocks file popup URLs from remote guests', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 108,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => 'https://example.com/'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+    }) => { action: 'deny' }
+    expect(handler({ url: 'file:///tmp/orca-mockups/index.html' })).toEqual({ action: 'deny' })
+
+    expect(shellOpenExternalMock).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalledWith(
+      'browser:open-link-in-orca-tab',
+      expect.anything()
+    )
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
+      browserPageId: 'browser-1',
+      origin: 'null',
+      action: 'blocked'
+    })
+  })
+
   it('falls back to opening popup URLs externally before a guest is registered', () => {
     const guest = {
       id: 105,
@@ -516,6 +563,131 @@ describe('browserManager', () => {
     const preventDefault = vi.fn()
     willNavigateHandler?.({ preventDefault }, 'file:///etc/passwd')
     expect(preventDefault).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows local file guest navigations inside the initially opened folder', () => {
+    let currentUrl = 'file:///tmp/orca-mockups/index.html'
+    const guest = {
+      id: 205,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => currentUrl),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const willNavigateHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'will-navigate'
+    )?.[1] as ((event: { preventDefault: () => void }, url: string) => void) | undefined
+
+    expect(willNavigateHandler).toBeTypeOf('function')
+    const siblingPreventDefault = vi.fn()
+    willNavigateHandler?.(
+      { preventDefault: siblingPreventDefault },
+      'file:///tmp/orca-mockups/mockup-01-command-center.html'
+    )
+    expect(siblingPreventDefault).not.toHaveBeenCalled()
+
+    currentUrl = 'file:///tmp/orca-mockups/nested/page.html'
+    const rootPreventDefault = vi.fn()
+    willNavigateHandler?.(
+      { preventDefault: rootPreventDefault },
+      'file:///tmp/orca-mockups/index.html'
+    )
+    expect(rootPreventDefault).not.toHaveBeenCalled()
+  })
+
+  it('blocks local file guest navigations outside the initially opened folder', () => {
+    const guest = {
+      id: 206,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => 'file:///tmp/orca-mockups/index.html'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const willNavigateHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'will-navigate'
+    )?.[1] as ((event: { preventDefault: () => void }, url: string) => void) | undefined
+
+    const preventDefault = vi.fn()
+    willNavigateHandler?.({ preventDefault }, 'file:///tmp/secret.html')
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks remote guest navigations to local files', () => {
+    const guest = {
+      id: 207,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => 'https://example.com/'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const willNavigateHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'will-navigate'
+    )?.[1] as ((event: { preventDefault: () => void }, url: string) => void) | undefined
+
+    const preventDefault = vi.fn()
+    willNavigateHandler?.({ preventDefault }, 'file:///tmp/orca-mockups/index.html')
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks file navigations after a local guest has moved to a remote page', () => {
+    let currentUrl = 'file:///tmp/orca-mockups/index.html'
+    const guest = {
+      id: 209,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => currentUrl),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const willNavigateHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'will-navigate'
+    )?.[1] as ((event: { preventDefault: () => void }, url: string) => void) | undefined
+
+    const initialPreventDefault = vi.fn()
+    willNavigateHandler?.(
+      { preventDefault: initialPreventDefault },
+      'file:///tmp/orca-mockups/mockup-01-command-center.html'
+    )
+    expect(initialPreventDefault).not.toHaveBeenCalled()
+
+    currentUrl = 'https://example.com/'
+    const remotePreventDefault = vi.fn()
+    willNavigateHandler?.(
+      { preventDefault: remotePreventDefault },
+      'file:///tmp/orca-mockups/mockup-02-repo-radar.html'
+    )
+    expect(remotePreventDefault).toHaveBeenCalledTimes(1)
   })
 
   it('unregisterAll clears tracked guests and context-menu listeners', () => {

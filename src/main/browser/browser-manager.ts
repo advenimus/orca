@@ -3,6 +3,8 @@ single privileged facade for guest registration, authorization, and lifecycle
 cleanup even after extracting the grab/session helpers. Keeping that ownership
 in one file avoids scattering the browser security boundary across modules. */
 import { randomUUID } from 'node:crypto'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { shell, webContents } from 'electron'
 import {
@@ -88,6 +90,36 @@ function safeOrigin(rawUrl: string): string {
   }
 }
 
+function localFilePathFromUrl(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl)
+    return parsed.protocol === 'file:' ? path.resolve(fileURLToPath(parsed)) : null
+  } catch {
+    return null
+  }
+}
+
+function trustedRootForCurrentFileUrl(rawUrl: string | null): string | null {
+  if (!rawUrl) {
+    return null
+  }
+  const localPath = localFilePathFromUrl(rawUrl)
+  return localPath ? path.dirname(localPath) : null
+}
+
+function isPathInsideRoot(rootPath: string, targetPath: string): boolean {
+  const relativePath = path.relative(rootPath, targetPath)
+  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+}
+
+function getGuestUrl(guest: Electron.WebContents): string | null {
+  try {
+    return typeof guest.getURL === 'function' ? guest.getURL() || null : null
+  } catch {
+    return null
+  }
+}
+
 export class BrowserManager {
   private readonly webContentsIdByTabId = new Map<string, number>()
   // Why: reverse map enables O(1) guest→tab lookups instead of O(N) linear
@@ -109,6 +141,7 @@ export class BrowserManager {
   private readonly worktreeIdByTabId = new Map<string, string>()
   private readonly policyAttachedGuestIds = new Set<number>()
   private readonly policyCleanupByGuestId = new Map<number, () => void>()
+  private readonly trustedFileNavigationRootByGuestId = new Map<number, string>()
   private readonly pendingLoadFailuresByGuestId = new Map<
     number,
     { code: number; description: string; validatedUrl: string }
@@ -420,6 +453,10 @@ export class BrowserManager {
     // webviews vs real Chrome. Inject overrides on every page load so manual
     // browsing passes challenges even without the CDP debugger attached.
     const disposeAntiDetection = this.injectAntiDetection(guest)
+    const initialFileNavigationRoot = trustedRootForCurrentFileUrl(getGuestUrl(guest))
+    if (initialFileNavigationRoot) {
+      this.trustedFileNavigationRootByGuestId.set(guest.id, initialFileNavigationRoot)
+    }
 
     // Why: background throttling must be disabled so agent-driven screenshots
     // (Page.captureScreenshot via CDP proxy) can capture frames even when the
@@ -430,6 +467,9 @@ export class BrowserManager {
       const browserTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
+      const canOpenInOrca =
+        browserUrl &&
+        (!browserUrl.startsWith('file:') || this.canGuestNavigateToFileUrl(guest, browserUrl))
 
       // Why: popup-capable guests are required for OAuth and target=_blank
       // flows, but Orca still does not host child windows itself. For normal
@@ -437,7 +477,7 @@ export class BrowserManager {
       // the user stays in the IDE. Only fall back to the system browser when
       // Orca cannot safely host the destination or when the guest is not yet
       // associated with a trusted browser tab/renderer.
-      if (browserTabId && browserUrl && this.openLinkInOrcaTab(browserTabId, browserUrl)) {
+      if (browserTabId && canOpenInOrca && this.openLinkInOrcaTab(browserTabId, browserUrl)) {
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(browserUrl),
           action: 'opened-in-orca'
@@ -469,13 +509,13 @@ export class BrowserManager {
       if (url.startsWith('blob:https://') || url.startsWith('blob:http://')) {
         return
       }
-      // Why: file:// is permitted at `will-attach-webview` so the preview pane
-      // can render local HTML the user explicitly opened. After that initial
-      // load, a page must not be able to redirect the guest to file:// — that
-      // would let a remote page probe the local filesystem. Keep the in-guest
-      // navigation guard strict even though initial attach is permissive.
+      // Why: local preview pages need relative links, but remote pages must not
+      // be able to redirect a trusted guest into the user's filesystem. Allow
+      // file-to-file navigation only within the initially opened local folder.
       if (url.startsWith('file:')) {
-        event.preventDefault()
+        if (!this.canGuestNavigateToFileUrl(guest, url)) {
+          event.preventDefault()
+        }
         return
       }
       if (!normalizeBrowserNavigationUrl(url)) {
@@ -516,7 +556,32 @@ export class BrowserManager {
         guest.off('will-redirect', navigationGuard)
         guest.off('did-fail-load', didFailLoadHandler)
       }
+      this.trustedFileNavigationRootByGuestId.delete(guest.id)
     })
+  }
+
+  private canGuestNavigateToFileUrl(guest: Electron.WebContents, targetUrl: string): boolean {
+    const targetPath = localFilePathFromUrl(targetUrl)
+    if (!targetPath) {
+      return false
+    }
+
+    const currentPath = localFilePathFromUrl(getGuestUrl(guest) ?? '')
+    if (!currentPath) {
+      return false
+    }
+
+    let trustedRoot = this.trustedFileNavigationRootByGuestId.get(guest.id) ?? null
+    if (!trustedRoot) {
+      trustedRoot = path.dirname(currentPath)
+      if (trustedRoot) {
+        // Why: this freezes the local preview's trust boundary at the first
+        // opened folder instead of widening it after each successful navigation.
+        this.trustedFileNavigationRootByGuestId.set(guest.id, trustedRoot)
+      }
+    }
+
+    return isPathInsideRoot(trustedRoot, currentPath) && isPathInsideRoot(trustedRoot, targetPath)
   }
 
   private retireStaleGuestWebContents(previousWebContentsId: number): void {
@@ -532,6 +597,7 @@ export class BrowserManager {
       this.policyCleanupByGuestId.delete(previousWebContentsId)
     }
     this.policyAttachedGuestIds.delete(previousWebContentsId)
+    this.trustedFileNavigationRootByGuestId.delete(previousWebContentsId)
     this.pendingLoadFailuresByGuestId.delete(previousWebContentsId)
     this.pendingPermissionEventsByGuestId.delete(previousWebContentsId)
     this.pendingPopupEventsByGuestId.delete(previousWebContentsId)
@@ -623,6 +689,7 @@ export class BrowserManager {
         this.policyCleanupByGuestId.delete(guestWebContentsId)
       }
       this.policyAttachedGuestIds.delete(guestWebContentsId)
+      this.trustedFileNavigationRootByGuestId.delete(guestWebContentsId)
     }
 
     const cleanup = this.contextMenuCleanupByTabId.get(browserTabId)
@@ -671,6 +738,7 @@ export class BrowserManager {
       this.unregisterGuest(browserTabId)
     }
     this.policyAttachedGuestIds.clear()
+    this.trustedFileNavigationRootByGuestId.clear()
     // Why: unregisterGuest only cleans up guests that were registered (have an
     // entry in webContentsIdByTabId). Guests that went through
     // attachGuestPolicies but were never registered still have cleanup closures
