@@ -346,13 +346,33 @@ describe('getEffectiveHooks', () => {
     expect(result?.scripts.setup).not.toContain('old-version')
   })
 
-  it('does not fall back to local settings hooks by default when yaml is missing', async () => {
+  it('falls back to legacy local hooks when policy is unset and yaml is missing', async () => {
     const fs = await import('fs')
     vi.mocked(fs.existsSync).mockReturnValue(false)
 
     const { getEffectiveHooks } = await import('./hooks')
     const repo = makeRepo({
       mode: 'override',
+      scripts: { setup: 'echo "local setup"', archive: 'echo "local archive"' }
+    })
+    const result = getEffectiveHooks(repo)
+
+    expect(result).toEqual({
+      scripts: {
+        setup: 'echo "local setup"',
+        archive: 'echo "local archive"'
+      }
+    })
+  })
+
+  it('does not fall back to local hooks when policy is explicitly shared-only', async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.existsSync).mockReturnValue(false)
+
+    const { getEffectiveHooks } = await import('./hooks')
+    const repo = makeRepo({
+      mode: 'override',
+      commandSourcePolicy: 'shared-only',
       scripts: { setup: 'echo "local setup"', archive: 'echo "local archive"' }
     })
     const result = getEffectiveHooks(repo)
