@@ -617,11 +617,33 @@ describe('getBranchCompare', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'main\n' })
       .mockRejectedValueOnce(new Error('unborn'))
+      .mockRejectedValueOnce(new Error('missing base'))
 
     const result = await getBranchCompare('/repo', 'origin/main')
 
     expect(result.summary.status).toBe('unborn-head')
     expect(result.summary.errorMessage).toContain('committed HEAD')
+    expect(result.entries).toEqual([])
+  })
+
+  it('treats an unborn branch with a resolvable base as having no committed branch changes', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature\n' })
+      .mockRejectedValueOnce(new Error('unborn'))
+      .mockResolvedValueOnce({ stdout: 'base-oid\n' })
+
+    const result = await getBranchCompare('/repo', 'origin/main')
+
+    expect(result.summary).toEqual({
+      baseRef: 'origin/main',
+      baseOid: 'base-oid',
+      compareRef: 'feature',
+      headOid: null,
+      mergeBase: null,
+      changedFiles: 0,
+      commitsAhead: 0,
+      status: 'ready'
+    })
     expect(result.entries).toEqual([])
   })
 
