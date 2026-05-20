@@ -25,6 +25,7 @@ import {
 import {
   computeTrustKey,
   computeTrustedHash,
+  getCodexCanonicalTrustPath,
   parseTrustKey,
   readHookTrustEntries,
   removeHookTrustEntries,
@@ -178,10 +179,11 @@ function removeStaleRuntimeHookTrustEntries(
   const expectedHashes = new Map(
     expectedEntries.map((entry) => [computeTrustKey(entry), computeTrustedHash(entry)])
   )
+  const canonicalRuntimeHooksPath = getCodexCanonicalTrustPath(runtimeHooksPath)
   const staleKeys: string[] = []
   for (const [key, state] of readHookTrustEntries(tomlPath)) {
     const parsed = parseTrustKey(key)
-    if (!parsed || parsed.sourcePath !== runtimeHooksPath) {
+    if (!parsed || getCodexCanonicalTrustPath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
       continue
     }
     if (expectedHashes.get(key) === state.trustedHash) {

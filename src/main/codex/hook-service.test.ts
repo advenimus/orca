@@ -1,6 +1,14 @@
 /* eslint-disable max-lines -- Why: this suite shares mocked homedir/userData setup across local/system Codex hook install, trust, and legacy-cleanup regressions. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'fs'
 import { tmpdir } from 'os'
 import type * as Os from 'os'
 import { join } from 'path'
@@ -54,7 +62,22 @@ function escapeTomlBasicString(value: string): string {
 }
 
 function hookTrustHeader(key: string): string {
-  return `[hooks.state."${escapeTomlBasicString(key)}"]`
+  return `[hooks.state."${escapeTomlBasicString(canonicalizeHookTrustKeyForTest(key))}"]`
+}
+
+function canonicalizeHookTrustKeyForTest(key: string): string {
+  const lastColon = key.lastIndexOf(':')
+  const secondLast = lastColon === -1 ? -1 : key.lastIndexOf(':', lastColon - 1)
+  const thirdLast = secondLast === -1 ? -1 : key.lastIndexOf(':', secondLast - 1)
+  if (thirdLast === -1) {
+    return key
+  }
+  const sourcePath = key.slice(0, thirdLast)
+  try {
+    return `${realpathSync.native(sourcePath)}${key.slice(thirdLast)}`
+  } catch {
+    return key
+  }
 }
 
 describe('CodexHookService', () => {
