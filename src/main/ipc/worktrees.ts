@@ -51,6 +51,8 @@ import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import {
   createLocalWorktree,
   createRemoteWorktree,
+  cleanupUnusedWorktreePushTargetRemote,
+  cleanupUnusedWorktreePushTargetRemoteSsh,
   notifyWorktreesChanged
 } from './worktree-remote'
 import {
@@ -603,9 +605,17 @@ export function registerWorktreeHandlers(
         worktreePath,
         registeredWorktrees
       ).path
+      const removedPushTarget = store.getWorktreeMeta(args.worktreeId)?.pushTarget
 
       if (repo.connectionId) {
         await provider!.removeWorktree(canonicalWorktreePath, args.force)
+        await cleanupUnusedWorktreePushTargetRemoteSsh(
+          provider!,
+          repo.path,
+          args.worktreeId,
+          removedPushTarget,
+          store
+        )
         runtime.clearOptimisticReconcileToken(args.worktreeId)
         store.removeWorktreeMeta(args.worktreeId)
         deleteWorktreeHistoryDir(args.worktreeId)
@@ -685,6 +695,12 @@ export function registerWorktreeHandlers(
           // list` continues to show the stale entry and the branch it had checked out
           // remains locked — other worktrees cannot check it out.
           await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
+          await cleanupUnusedWorktreePushTargetRemote(
+            repo.path,
+            args.worktreeId,
+            removedPushTarget,
+            store
+          )
           runtime.clearOptimisticReconcileToken(args.worktreeId)
           store.removeWorktreeMeta(args.worktreeId)
           deleteWorktreeHistoryDir(args.worktreeId)
@@ -696,6 +712,12 @@ export function registerWorktreeHandlers(
           formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
         )
       }
+      await cleanupUnusedWorktreePushTargetRemote(
+        repo.path,
+        args.worktreeId,
+        removedPushTarget,
+        store
+      )
       runtime.clearOptimisticReconcileToken(args.worktreeId)
       store.removeWorktreeMeta(args.worktreeId)
       deleteWorktreeHistoryDir(args.worktreeId)
