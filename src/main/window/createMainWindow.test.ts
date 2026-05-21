@@ -1061,6 +1061,83 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalledWith('ui:toggleLeftSidebar')
   })
 
+  it('skips Cmd+B interception when floating terminal input is focused', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const setFocusedListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setFloatingTerminalInputFocused')?.[1]
+    expect(setFocusedListener).toBeTypeOf('function')
+    setFocusedListener?.({ sender: webContents } as never, true)
+
+    const preventDefault = vi.fn()
+    const isDarwin = process.platform === 'darwin'
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      {
+        type: 'keyDown',
+        code: 'KeyB',
+        key: 'b',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: false
+      } as never
+    )
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:toggleLeftSidebar')
+
+    webContents.send.mockClear()
+    const newWorkspacePreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: newWorkspacePreventDefault } as never,
+      {
+        type: 'keyDown',
+        code: 'KeyN',
+        key: 'n',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: false
+      } as never
+    )
+
+    expect(newWorkspacePreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:openNewWorkspace')
+  })
+
   it('still intercepts Cmd+Shift+B and Cmd+Alt+B when the markdown editor is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {

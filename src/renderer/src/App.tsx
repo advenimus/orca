@@ -58,6 +58,8 @@ import {
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
+  isFloatingWorkspacePanelShortcut,
+  isFloatingWorkspaceTerminalInputTarget,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
 import { DictationController } from './components/dictation/DictationController'
@@ -1074,6 +1076,13 @@ function App(): React.JSX.Element {
         return
       }
 
+      // Why: xterm's helper textarea is intentionally not a generic editable
+      // target, but floating-terminal SSH/tmux control chords must still reach
+      // the terminal instead of app-level chrome shortcuts.
+      if (isFloatingWorkspaceTerminalInputTarget(e.target)) {
+        return
+      }
+
       // Cmd/Ctrl+Alt+Arrow — worktree history back/forward. Handled before the
       // `mod && !alt` branch below since this is the one renderer-side shortcut
       // that intentionally requires Alt.
@@ -1109,11 +1118,7 @@ function App(): React.JSX.Element {
       // counterpart, so suppressing them here would silently no-op when
       // focus lives inside the floating panel.
       if (isFloatingWorkspacePanelFocused()) {
-        const key = e.key.toLowerCase()
-        const panelClaimsChord = e.shiftKey
-          ? !e.altKey && (key === 'b' || key === 'm')
-          : !e.altKey && (key === 't' || key === 'w')
-        if (panelClaimsChord) {
+        if (isFloatingWorkspacePanelShortcut(e, isMac)) {
           return
         }
       }

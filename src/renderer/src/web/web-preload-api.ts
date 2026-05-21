@@ -875,6 +875,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFileDrop: () => noopUnsubscribe,
     syncTrafficLights: () => {},
     setMarkdownEditorFocused: () => {},
+    setFloatingTerminalInputFocused: () => {},
     onRichMarkdownContextCommand: () => noopUnsubscribe,
     onFullscreenChanged: () => noopUnsubscribe,
     minimize: () => {},

@@ -466,6 +466,7 @@ export function createMainWindow(
   // preserves the ^B-to-PTY leak protection rationale in
   // shared/window-shortcut-policy.ts:74-77.
   let markdownEditorFocused = false
+  let floatingTerminalInputFocused = false
 
   const markdownFocusChannel = 'ui:setMarkdownEditorFocused'
   // Why: coerce to strict boolean and verify the sender. A renderer bug or
@@ -481,6 +482,19 @@ export function createMainWindow(
     markdownEditorFocused = focused === true
   }
   ipcMain.on(markdownFocusChannel, onMarkdownEditorFocused)
+  const floatingTerminalInputFocusChannel = 'ui:setFloatingTerminalInputFocused'
+  // Why: main before-input-event runs before renderer keydown handlers. Mirror
+  // floating xterm focus so Ctrl+B/L and related shell chords can reach SSH/tmux.
+  const onFloatingTerminalInputFocused = (
+    event: Electron.IpcMainEvent,
+    focused: unknown
+  ): void => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    floatingTerminalInputFocused = focused === true
+  }
+  ipcMain.on(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
 
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
     const template = buildEditableContextMenuTemplate(params, mainWindow.webContents)
@@ -500,6 +514,9 @@ export function createMainWindow(
   // ^B-to-PTY leak invariant from shared/window-shortcut-policy.ts:74-77.
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
+  }
+  const resetFloatingTerminalInputFocus = (): void => {
+    floatingTerminalInputFocused = false
   }
   let rendererProcessGone = false
   let rendererRecoveryTimer: ReturnType<typeof setTimeout> | null = null
@@ -540,16 +557,21 @@ export function createMainWindow(
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     rendererProcessGone = true
     resetMarkdownEditorFocus()
+    resetFloatingTerminalInputFocus()
     if (opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false) {
       opts?.onRendererProcessGone?.(details, rendererWebContentsId)
     }
     console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
     scheduleRendererRecovery(details)
   })
-  mainWindow.webContents.on('destroyed', resetMarkdownEditorFocus)
+  mainWindow.webContents.on('destroyed', () => {
+    resetMarkdownEditorFocus()
+    resetFloatingTerminalInputFocus()
+  })
   mainWindow.webContents.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
     if (isMainFrame) {
       resetMarkdownEditorFocus()
+      resetFloatingTerminalInputFocus()
     }
   })
   mainWindow.webContents.on('did-finish-load', () => {
@@ -606,11 +628,17 @@ export function createMainWindow(
       return
     }
 
-    // Why: keep the main-process interception surface as an explicit allowlist.
-    // Anything outside this helper must continue to the renderer/PTTY so
-    // readline control chords are not silently stolen above the terminal.
     const action = resolveWindowShortcutAction(input, process.platform)
     if (!action) {
+      return
+    }
+
+    // Why: keep global app routing for non-terminal actions, but let floating
+    // xterm own shell control chars that overlap sidebar chrome shortcuts.
+    if (
+      floatingTerminalInputFocused &&
+      (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
+    ) {
       return
     }
 
@@ -830,6 +858,7 @@ export function createMainWindow(
     // stale-true flag can't leak past subsequent state transitions. Paired
     // with the webContents lifecycle resets above.
     markdownEditorFocused = false
+    floatingTerminalInputFocused = false
     clearRendererRecoveryTimer()
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
     ipcMain.removeListener(minimizeChannel, onMinimize)
@@ -840,6 +869,7 @@ export function createMainWindow(
     ipcMain.removeHandler(isMaximizedChannel)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
+    ipcMain.removeListener(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
     // Why: on updater-triggered shutdown, BrowserWindow can emit `closed`
     // after its webContents has already been destroyed. The destroyed
     // webContents owns its listeners, so do not touch `mainWindow.webContents`

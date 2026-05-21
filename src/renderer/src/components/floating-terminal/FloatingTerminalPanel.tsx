@@ -24,6 +24,10 @@ import { getConnectionId } from '@/lib/connection-context'
 import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  isFloatingWorkspacePanelShortcut,
+  isFloatingWorkspaceTerminalInputTarget
+} from '@/lib/floating-workspace-terminal-actions'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -645,6 +649,10 @@ export function FloatingTerminalPanel({
     panelRef.current?.focus({ preventScroll: true })
   }, [])
 
+  const setFloatingTerminalInputFocused = useCallback((target: EventTarget | null): void => {
+    window.api.ui.setFloatingTerminalInputFocused(isFloatingWorkspaceTerminalInputTarget(target))
+  }, [])
+
   const handleShortcutSurfaceKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (!open || event.defaultPrevented || event.repeat) {
@@ -659,9 +667,13 @@ export function FloatingTerminalPanel({
         return
       }
 
-      const isMac = navigator.userAgent.includes('Mac')
-      const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!mod || event.altKey) {
+      if (
+        !isFloatingWorkspacePanelShortcut(
+          event,
+          navigator.userAgent.includes('Mac'),
+          panelRef.current
+        )
+      ) {
         return
       }
 
@@ -700,6 +712,13 @@ export function FloatingTerminalPanel({
       open
     ]
   )
+
+  useEffect(() => {
+    if (!open) {
+      window.api.ui.setFloatingTerminalInputFocused(false)
+    }
+    return () => window.api.ui.setFloatingTerminalInputFocused(false)
+  }, [open])
 
   const toggleMaximized = useCallback(() => {
     setMaximized((current) => {
@@ -795,6 +814,8 @@ export function FloatingTerminalPanel({
           clampFloatingTerminalBounds({ ...prev, width: rect.width, height: rect.height })
         )
       }}
+      onFocusCapture={(event) => setFloatingTerminalInputFocused(event.target)}
+      onBlurCapture={(event) => setFloatingTerminalInputFocused(event.relatedTarget)}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
       <div className="flex min-h-0 flex-1 flex-col">
