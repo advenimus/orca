@@ -2232,8 +2232,19 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               alias.repoId,
               alias.connectionId
             )
+            const startedEntryKey = prRefreshStartedEntryKey(event.sequence, alias.cacheKey)
+            for (const existingKey of prRefreshStartedHostedReviewEntries.keys()) {
+              if (existingKey === startedEntryKey) continue
+              const separatorIndex = existingKey.indexOf('::')
+              if (
+                separatorIndex !== -1 &&
+                existingKey.slice(separatorIndex + 2) === alias.cacheKey
+              ) {
+                prRefreshStartedHostedReviewEntries.delete(existingKey)
+              }
+            }
             prRefreshStartedHostedReviewEntries.set(
-              prRefreshStartedEntryKey(event.sequence, alias.cacheKey),
+              startedEntryKey,
               s.hostedReviewCache[hostedReviewCacheKey]
             )
           }
