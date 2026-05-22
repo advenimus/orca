@@ -84,6 +84,16 @@ function isFloatingTerminalDragTarget(target: EventTarget): boolean {
   return !(target instanceof HTMLElement && target.closest(FLOATING_TERMINAL_NO_DRAG_SELECTOR))
 }
 
+function setFloatingTerminalInputFocusedInMain(focused: boolean): void {
+  const setInputFocused = window.api.ui.setFloatingTerminalInputFocused
+  // Why: dev reloads can pair a new renderer with an older preload; losing this
+  // shortcut mirror should not take down the whole React tree.
+  if (typeof setInputFocused !== 'function') {
+    return
+  }
+  setInputFocused(focused)
+}
+
 export function FloatingTerminalPanel({
   open,
   onOpenChange
@@ -659,7 +669,7 @@ export function FloatingTerminalPanel({
   }, [])
 
   const setFloatingTerminalInputFocused = useCallback((target: EventTarget | null): void => {
-    window.api.ui.setFloatingTerminalInputFocused(isFloatingWorkspaceTerminalInputTarget(target))
+    setFloatingTerminalInputFocusedInMain(isFloatingWorkspaceTerminalInputTarget(target))
   }, [])
 
   const handleShortcutSurfaceKeyDown = useCallback(
@@ -724,9 +734,9 @@ export function FloatingTerminalPanel({
 
   useEffect(() => {
     if (!open) {
-      window.api.ui.setFloatingTerminalInputFocused(false)
+      setFloatingTerminalInputFocusedInMain(false)
     }
-    return () => window.api.ui.setFloatingTerminalInputFocused(false)
+    return () => setFloatingTerminalInputFocusedInMain(false)
   }, [open])
 
   const toggleMaximized = useCallback(() => {

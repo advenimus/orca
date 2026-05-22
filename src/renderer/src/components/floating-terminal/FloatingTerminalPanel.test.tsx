@@ -542,6 +542,28 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
+  it('does not crash if the preload focus bridge is stale during dev reload', async () => {
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn(),
+      api: {
+        app: {
+          getFloatingMarkdownDirectory: mocks.getFloatingMarkdownDirectory,
+          getFloatingTerminalCwd: mocks.getFloatingTerminalCwd,
+          pickFloatingMarkdownDocument: mocks.pickFloatingMarkdownDocument
+        },
+        browser: { notifyActiveTabChanged: vi.fn() },
+        cli: { getInstallStatus: mocks.getInstallStatus },
+        ui: {}
+      },
+      innerWidth: 1200,
+      removeEventListener: vi.fn()
+    })
+
+    await renderPanel(false)
+
+    expect(() => runEffects()).not.toThrow()
+  })
+
   it('minimizes the empty floating workspace from the empty state', async () => {
     const onOpenChange = vi.fn()
     const element = await renderPanel(true, onOpenChange)

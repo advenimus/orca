@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Why: crash-reporting IPC keeps report selection, diagnostic upload, feedback submission, and orphan cleanup in one handler boundary. */
 import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
 import { app, clipboard, dialog, ipcMain } from 'electron'
 import {

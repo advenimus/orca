@@ -27,7 +27,13 @@ export function CrashReportDialog(): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
+  const [openedFromHelp, setOpenedFromHelp] = useState(false)
   const deferredNotes = useDeferredValue(notes)
+  const title = openedFromHelp ? 'Report a crash' : 'Orca closed unexpectedly'
+  const notesPlaceholder =
+    openedFromHelp && !report
+      ? 'Optional: what happened?'
+      : 'Optional: what were you doing before Orca closed?'
   const diagnosticText = useMemo(
     // Why: formatting applies redaction and truncation over the full crash
     // payload. Keep that preview update out of the textarea keystroke path.
@@ -36,6 +42,9 @@ export function CrashReportDialog(): React.JSX.Element {
   )
 
   const loadCrashReport = async (promptIfPresent: boolean): Promise<void> => {
+    if (!promptIfPresent) {
+      setOpenedFromHelp(true)
+    }
     setLoading(true)
     try {
       const nextReport = promptIfPresent
@@ -55,6 +64,7 @@ export function CrashReportDialog(): React.JSX.Element {
       }
       setReport(displayedReport)
       if (nextReport && promptIfPresent) {
+        setOpenedFromHelp(false)
         setOpen(true)
       }
     } catch (error) {
@@ -182,7 +192,7 @@ export function CrashReportDialog(): React.JSX.Element {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <AlertTriangle className="size-4 text-destructive" />
-            Orca closed unexpectedly
+            {title}
           </DialogTitle>
           <DialogDescription className="text-xs">
             Send a privacy-safe diagnostic report to help us understand what happened.
@@ -198,12 +208,18 @@ export function CrashReportDialog(): React.JSX.Element {
                 Orca {report.appVersion}
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
+              {loading
+                ? 'Checking for crash reports...'
+                : 'No automatic crash report was captured. You can still send details and attach recent diagnostic logs when available.'}
+            </div>
+          )}
           <textarea
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             rows={4}
-            placeholder="Optional: what were you doing before Orca closed?"
+            placeholder={notesPlaceholder}
             className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />
           {report ? (
