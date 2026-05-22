@@ -6640,7 +6640,7 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
 
-    const repo = await this.resolveRepoSelector(args.repoSelector)
+    const repo = await this.resolveRepoSelector(args.repoSelector, { includeGitUsername: false })
     if (isFolderRepo(repo)) {
       throw new Error('Folder mode does not support creating worktrees.')
     }
@@ -6665,7 +6665,10 @@ export class OrcaRuntimeService {
     const requestedName = args.name
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
-    const username = getGitUsername(repo.path)
+    const username =
+      !args.branchNameOverride && settings.branchPrefix === 'git-username'
+        ? getGitUsername(repo.path)
+        : ''
     const branchName = await resolveCreateBranchName(
       repo.path,
       args.branchNameOverride,
@@ -9188,11 +9191,14 @@ export class OrcaRuntimeService {
     return this.store?.getAllWorktreeLineage?.() ?? {}
   }
 
-  private async resolveRepoSelector(selector: string): Promise<Repo> {
+  private async resolveRepoSelector(
+    selector: string,
+    options: { includeGitUsername?: boolean } = {}
+  ): Promise<Repo> {
     if (!this.store) {
       throw new Error('repo_not_found')
     }
-    const repos = this.store.getRepos()
+    const repos = this.store.getRepos(options)
     let candidates: Repo[]
 
     if (selector.startsWith('id:')) {

@@ -998,7 +998,10 @@ export async function createLocalWorktree(
 ): Promise<CreateWorktreeResult> {
   const settings = store.getSettings()
 
-  const username = getGitUsername(repo.path)
+  const username =
+    !args.branchNameOverride && settings.branchPrefix === 'git-username'
+      ? getGitUsername(repo.path)
+      : ''
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   const requestedDisplayName = args.displayName

@@ -1155,6 +1155,12 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
+type RepoHydrationOptions = {
+  // Why: background/create paths often need only persisted repo metadata; resolving
+  // the displayed username can synchronously probe git/gh and block the caller.
+  includeGitUsername?: boolean
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -1877,8 +1883,8 @@ export class Store {
 
   // ── Repos ──────────────────────────────────────────────────────────
 
-  getRepos(): Repo[] {
-    return this.state.repos.map((repo) => this.hydrateRepo(repo))
+  getRepos(options: RepoHydrationOptions = {}): Repo[] {
+    return this.state.repos.map((repo) => this.hydrateRepo(repo, options))
   }
 
   /**
@@ -1891,9 +1897,9 @@ export class Store {
     return this.state.repos.length
   }
 
-  getRepo(id: string): Repo | undefined {
+  getRepo(id: string, options: RepoHydrationOptions = {}): Repo | undefined {
     const repo = this.state.repos.find((r) => r.id === id)
-    return repo ? this.hydrateRepo(repo) : undefined
+    return repo ? this.hydrateRepo(repo, options) : undefined
   }
 
   addRepo(repo: Repo): void {
@@ -1987,20 +1993,23 @@ export class Store {
     return this.hydrateRepo(repo)
   }
 
-  private hydrateRepo(repo: Repo): Repo {
-    const gitUsername = isFolderRepo(repo)
-      ? ''
-      : (this.gitUsernameCache.get(repo.path) ??
-        (() => {
-          const username = getGitUsername(repo.path)
-          this.gitUsernameCache.set(repo.path, username)
-          return username
-        })())
+  private hydrateRepo(repo: Repo, options: RepoHydrationOptions = {}): Repo {
+    const { includeGitUsername = true } = options
+    const gitUsername =
+      !includeGitUsername || isFolderRepo(repo)
+        ? ''
+        : (this.gitUsernameCache.get(repo.path) ??
+          (() => {
+            const username = getGitUsername(repo.path)
+            this.gitUsernameCache.set(repo.path, username)
+            return username
+          })())
+    const { gitUsername: _persistedGitUsername, ...repoWithoutUsername } = repo
 
     return {
-      ...repo,
+      ...repoWithoutUsername,
       kind: isFolderRepo(repo) ? 'folder' : 'git',
-      gitUsername,
+      ...(includeGitUsername ? { gitUsername } : {}),
       hookSettings: {
         ...getDefaultRepoHookSettings(),
         ...repo.hookSettings,

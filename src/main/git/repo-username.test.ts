@@ -38,12 +38,13 @@ describe('getGitUsername', () => {
     ;({ getGitUsername } = await import('./repo'))
   })
 
-  it('uses repo-local email before checking GitHub CLI login', () => {
+  it('prefers GitHub CLI login over the repo-local email fallback', () => {
     gitConfig['user.email'] = 'demo@example.com'
     gitConfig['user.name'] = 'Demo User'
+    execSyncMock.mockImplementationOnce(() => 'gh-demo\n')
 
-    expect(getGitUsername('/repo')).toBe('demo')
-    expect(execSyncMock).not.toHaveBeenCalled()
+    expect(getGitUsername('/repo')).toBe('gh-demo')
+    expect(execSyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('bounds and caches failed GitHub CLI lookup', () => {

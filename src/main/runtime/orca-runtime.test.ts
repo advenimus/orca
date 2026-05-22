@@ -20,7 +20,7 @@ import {
   runHook,
   shouldRunSetupForCreate
 } from '../hooks'
-import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
+import { getBranchConflictKind, getDefaultBaseRef, getGitUsername } from '../git/repo'
 import type { OrchestrationDb } from './orchestration/db'
 import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -284,6 +284,8 @@ afterEach(() => {
   vi.mocked(parseOrcaYaml).mockReset()
   vi.mocked(runHook).mockReset()
   vi.mocked(shouldRunSetupForCreate).mockReset()
+  vi.mocked(getGitUsername).mockReset()
+  vi.mocked(getGitUsername).mockReturnValue('')
   vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
   vi.mocked(getEffectiveHooks).mockReturnValue(null)
   vi.mocked(getEffectiveHooksFromConfig).mockReturnValue(null)
@@ -971,7 +973,17 @@ describe('OrcaRuntimeService', () => {
 
   it('creates a branchNameOverride worktree from the selected matching remote base ref', async () => {
     const runtime = new OrcaRuntimeService(store)
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    const settingsSpy = vi.spyOn(store, 'getSettings').mockReturnValue({
+      workspaceDir: '/tmp/workspaces',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      branchPrefix: 'git-username',
+      branchPrefixCustom: ''
+    })
+    const getReposSpy = vi.spyOn(store, 'getRepos')
+    const gitSpy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: '', stderr: '' })
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/feature-something')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/feature-something')
     vi.mocked(listWorktrees).mockResolvedValueOnce([
@@ -984,29 +996,37 @@ describe('OrcaRuntimeService', () => {
       }
     ])
 
-    const result = await runtime.createManagedWorktree({
-      repoSelector: 'id:repo-1',
-      name: 'feature/something',
-      baseBranch: 'origin/feature/something',
-      branchNameOverride: 'feature/something'
-    })
+    try {
+      const result = await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'feature/something',
+        baseBranch: 'origin/feature/something',
+        branchNameOverride: 'feature/something'
+      })
 
-    expect(getBranchConflictKind).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      'feature/something',
-      'origin/feature/something'
-    )
-    expect(addWorktree).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      '/tmp/workspaces/feature-something',
-      'feature/something',
-      'origin/feature/something',
-      false
-    )
-    expect(result.worktree).toMatchObject({
-      path: '/tmp/workspaces/feature-something',
-      branch: 'feature/something'
-    })
+      expect(getBranchConflictKind).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        'feature/something',
+        'origin/feature/something'
+      )
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        '/tmp/workspaces/feature-something',
+        'feature/something',
+        'origin/feature/something',
+        false
+      )
+      expect(result.worktree).toMatchObject({
+        path: '/tmp/workspaces/feature-something',
+        branch: 'feature/something'
+      })
+      expect(getReposSpy).toHaveBeenCalledWith({ includeGitUsername: false })
+      expect(getGitUsername).not.toHaveBeenCalled()
+    } finally {
+      gitSpy.mockRestore()
+      getReposSpy.mockRestore()
+      settingsSpy.mockRestore()
+    }
   })
 
   it('checks out a selected existing local branch even when that branch already has a PR', async () => {

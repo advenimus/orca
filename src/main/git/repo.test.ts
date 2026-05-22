@@ -96,7 +96,7 @@ describe('getGitUsername', () => {
     installFakeGh(binDir, 'gh-login-wins')
     git(tmpDir, ['config', 'user.email', 'email-local@example.com'])
     git(tmpDir, ['config', 'user.name', 'Brennan Benson'])
-    process.env.PATH = binDir
+    process.env.PATH = originalPath ? `${binDir}${path.delimiter}${originalPath}` : binDir
 
     const username = getGitUsername(tmpDir)
 

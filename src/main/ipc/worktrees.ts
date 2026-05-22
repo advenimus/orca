@@ -384,7 +384,7 @@ export function registerWorktreeHandlers(
       // title) and the redactor would have to learn yet another rule;
       // the repo ID is the safer correlator for the bundle.
       return withWorktreeSpan({ stage: 'create' }, async () => {
-        const repo = store.getRepo(args.repoId)
+        const repo = store.getRepo(args.repoId, { includeGitUsername: false })
         if (!repo) {
           throw new Error(`Repo not found: ${args.repoId}`)
         }

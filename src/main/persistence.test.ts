@@ -1290,6 +1290,21 @@ describe('Store', () => {
     expect(fetched!.gitUsername).toBe('testuser')
   })
 
+  it('can read repos without hydrating git username', async () => {
+    const store = await createStore()
+    const { getGitUsername } = await import('./git/repo')
+    vi.mocked(getGitUsername).mockClear()
+    store.addRepo(makeRepo())
+
+    const fetched = store.getRepo('r1', { includeGitUsername: false })
+    const repos = store.getRepos({ includeGitUsername: false })
+
+    expect(fetched).toMatchObject({ id: 'r1', displayName: 'test' })
+    expect(fetched!.gitUsername).toBeUndefined()
+    expect(repos[0].gitUsername).toBeUndefined()
+    expect(getGitUsername).not.toHaveBeenCalled()
+  })
+
   it('getRepo returns undefined for nonexistent id', async () => {
     const store = await createStore()
     expect(store.getRepo('nonexistent')).toBeUndefined()

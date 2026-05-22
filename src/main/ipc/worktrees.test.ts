@@ -451,6 +451,13 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('uses branchNameOverride for the git branch while keeping the sanitized worktree path', async () => {
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'git-username',
+      branchPrefixCustom: '',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace'
+    })
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/feature-something',
@@ -484,6 +491,8 @@ describe('registerWorktreeHandlers', () => {
         branch: 'feature/something'
       })
     })
+    expect(store.getRepo).toHaveBeenCalledWith('repo-1', { includeGitUsername: false })
+    expect(getGitUsernameMock).not.toHaveBeenCalled()
   })
 
   it('checks out a selected existing local branch exactly', async () => {
