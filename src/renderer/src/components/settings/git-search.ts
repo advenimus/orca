@@ -4,7 +4,7 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Branch Prefix',
     description: 'Prefix added to branch names when creating worktrees.',
-    keywords: ['branch naming', 'github username', 'git author', 'custom']
+    keywords: ['branch naming', 'git username', 'custom']
   },
   {
     title: 'Refresh Local Base Ref',

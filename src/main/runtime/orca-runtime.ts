@@ -306,11 +306,6 @@ import {
   configureCreatedWorktreePushTarget,
   prepareWorktreePushTarget
 } from '../ipc/worktree-remote'
-import {
-  getLocalBranchPrefixValue,
-  getSshBranchPrefixValue,
-  shouldResolveBranchPrefixValue
-} from '../git/branch-prefix-value'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
@@ -659,17 +654,15 @@ function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): P
   ) as Partial<T>
 }
 
-const PUBLIC_REPO_HYDRATION_OPTIONS = { includeGitUsername: true } as const
-
 async function resolveCreateBranchName(
   repoPath: string,
   branchNameOverride: string | undefined,
   sanitizedName: string,
   settings: { branchPrefix: string; branchPrefixCustom?: string },
-  branchPrefixValue: string | null
+  username: string | null
 ): Promise<string> {
   if (!branchNameOverride) {
-    return computeBranchName(sanitizedName, settings, branchPrefixValue)
+    return computeBranchName(sanitizedName, settings, username)
   }
   if (branchNameOverride.startsWith('-')) {
     throw new Error('Branch name must not start with "-"')
@@ -4819,34 +4812,8 @@ export class OrcaRuntimeService {
     }
   }
 
-  listRepos(options: { includeGitUsername?: boolean } = PUBLIC_REPO_HYDRATION_OPTIONS): Repo[] {
-    return this.store?.getRepos(options) ?? []
-  }
-
-  async getRepoGitUsername(repoSelector: string): Promise<string> {
-    const repo = await this.resolveRepoSelector(repoSelector, { includeGitUsername: false })
-    if (isFolderRepo(repo)) {
-      return ''
-    }
-    if (!repo.connectionId) {
-      return getGitUsername(repo.path)
-    }
-    const provider = getSshGitProvider(repo.connectionId)
-    return provider
-      ? getSshBranchPrefixValue(provider, repo.path, { branchPrefix: 'github-username' })
-      : ''
-  }
-
-  async getRepoBranchPrefixValue(repoSelector: string, branchPrefix: string): Promise<string> {
-    const repo = await this.resolveRepoSelector(repoSelector, { includeGitUsername: false })
-    if (isFolderRepo(repo)) {
-      return ''
-    }
-    if (!repo.connectionId) {
-      return getLocalBranchPrefixValue(repo.path, { branchPrefix })
-    }
-    const provider = getSshGitProvider(repo.connectionId)
-    return provider ? getSshBranchPrefixValue(provider, repo.path, { branchPrefix }) : ''
+  listRepos(): Repo[] {
+    return this.store?.getRepos() ?? []
   }
 
   async listSparsePresets(repoSelector: string) {
@@ -4896,7 +4863,7 @@ export class OrcaRuntimeService {
 
     const existing = this.store.getRepos().find((repo) => runtimePathsEqual(repo.path, path))
     if (existing) {
-      return this.store.getRepo(existing.id, PUBLIC_REPO_HYDRATION_OPTIONS) ?? existing
+      return existing
     }
 
     const repo: Repo = {
@@ -4910,7 +4877,7 @@ export class OrcaRuntimeService {
     this.store.addRepo(repo)
     this.invalidateResolvedWorktreeCache()
     this.notifier?.reposChanged()
-    return this.store.getRepo(repo.id, PUBLIC_REPO_HYDRATION_OPTIONS) ?? repo
+    return this.store.getRepo(repo.id) ?? repo
   }
 
   async createRepo(
@@ -4940,9 +4907,7 @@ export class OrcaRuntimeService {
     const targetPath = join(trimmedParentPath, trimmedName)
     const existing = this.store.getRepos().find((repo) => runtimePathsEqual(repo.path, targetPath))
     if (existing) {
-      return {
-        repo: this.store.getRepo(existing.id, PUBLIC_REPO_HYDRATION_OPTIONS) ?? existing
-      }
+      return { repo: existing }
     }
 
     let createdDir = false
@@ -5006,9 +4971,7 @@ export class OrcaRuntimeService {
       .getRepos()
       .find((repo) => runtimePathsEqual(repo.path, targetPath))
     if (raceWinner) {
-      return {
-        repo: this.store.getRepo(raceWinner.id, PUBLIC_REPO_HYDRATION_OPTIONS) ?? raceWinner
-      }
+      return { repo: raceWinner }
     }
 
     const repo: Repo = {
@@ -5023,7 +4986,7 @@ export class OrcaRuntimeService {
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
     this.notifier?.reposChanged()
-    return { repo: this.store.getRepo(repo.id, PUBLIC_REPO_HYDRATION_OPTIONS) ?? repo }
+    return { repo: this.store.getRepo(repo.id) ?? repo }
   }
 
   async cloneRepo(url: string, destination: string): Promise<Repo> {
@@ -5069,17 +5032,13 @@ export class OrcaRuntimeService {
     const existing = this.store.getRepos().find((repo) => runtimePathsEqual(repo.path, clonePath))
     if (existing) {
       if (isFolderRepo(existing)) {
-        const updated = this.store.updateRepo(
-          existing.id,
-          { kind: 'git' },
-          PUBLIC_REPO_HYDRATION_OPTIONS
-        )
+        const updated = this.store.updateRepo(existing.id, { kind: 'git' })
         if (updated) {
           this.notifier?.reposChanged()
           return updated
         }
       }
-      return this.store.getRepo(existing.id, PUBLIC_REPO_HYDRATION_OPTIONS) ?? existing
+      return existing
     }
 
     const repo: Repo = {
@@ -5094,11 +5053,11 @@ export class OrcaRuntimeService {
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
     this.notifier?.reposChanged()
-    return this.store.getRepo(repo.id, PUBLIC_REPO_HYDRATION_OPTIONS) ?? repo
+    return this.store.getRepo(repo.id) ?? repo
   }
 
   async showRepo(repoSelector: string): Promise<Repo> {
-    return await this.resolveRepoSelector(repoSelector, PUBLIC_REPO_HYDRATION_OPTIONS)
+    return await this.resolveRepoSelector(repoSelector)
   }
 
   async setRepoBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {
@@ -5109,11 +5068,7 @@ export class OrcaRuntimeService {
     if (isFolderRepo(repo)) {
       throw new Error('Folder mode does not support base refs.')
     }
-    const updated = this.store.updateRepo(
-      repo.id,
-      { worktreeBaseRef: baseRef },
-      PUBLIC_REPO_HYDRATION_OPTIONS
-    )
+    const updated = this.store.updateRepo(repo.id, { worktreeBaseRef: baseRef })
     if (!updated) {
       throw new Error('repo_not_found')
     }
@@ -5141,11 +5096,7 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.resolveRepoSelector(repoSelector)
-    const updated = this.store.updateRepo(
-      repo.id,
-      omitUndefinedProperties(updates),
-      PUBLIC_REPO_HYDRATION_OPTIONS
-    )
+    const updated = this.store.updateRepo(repo.id, omitUndefinedProperties(updates))
     if (!updated) {
       throw new Error('repo_not_found')
     }
@@ -6689,7 +6640,7 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
 
-    const repo = await this.resolveRepoSelector(args.repoSelector, { includeGitUsername: false })
+    const repo = await this.resolveRepoSelector(args.repoSelector)
     if (isFolderRepo(repo)) {
       throw new Error('Folder mode does not support creating worktrees.')
     }
@@ -6714,16 +6665,13 @@ export class OrcaRuntimeService {
     const requestedName = args.name
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
-    const branchPrefixValue =
-      !args.branchNameOverride && shouldResolveBranchPrefixValue(settings)
-        ? getLocalBranchPrefixValue(repo.path, settings)
-        : ''
+    const username = getGitUsername(repo.path)
     const branchName = await resolveCreateBranchName(
       repo.path,
       args.branchNameOverride,
       sanitizedName,
       settings,
-      branchPrefixValue
+      username
     )
 
     const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
@@ -9240,14 +9188,11 @@ export class OrcaRuntimeService {
     return this.store?.getAllWorktreeLineage?.() ?? {}
   }
 
-  private async resolveRepoSelector(
-    selector: string,
-    options: { includeGitUsername?: boolean } = {}
-  ): Promise<Repo> {
+  private async resolveRepoSelector(selector: string): Promise<Repo> {
     if (!this.store) {
       throw new Error('repo_not_found')
     }
-    const repos = this.store.getRepos(options)
+    const repos = this.store.getRepos()
     let candidates: Repo[]
 
     if (selector.startsWith('id:')) {

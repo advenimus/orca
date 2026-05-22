@@ -21,7 +21,7 @@ import type {
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
-import { getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
+import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
@@ -45,11 +45,6 @@ import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
-import {
-  getLocalBranchPrefixValue,
-  getSshBranchPrefixValue,
-  shouldResolveBranchPrefixValue
-} from '../git/branch-prefix-value'
 import {
   sanitizeWorktreeName,
   sanitizeWorktreeDisplayName,
@@ -107,10 +102,10 @@ async function resolveCreateBranchName(
   branchNameOverride: string | undefined,
   sanitizedName: string,
   settings: { branchPrefix: string; branchPrefixCustom?: string },
-  branchPrefixValue: string | null
+  username: string | null
 ): Promise<string> {
   if (!branchNameOverride) {
-    return computeBranchName(sanitizedName, settings, branchPrefixValue)
+    return computeBranchName(sanitizedName, settings, username)
   }
   if (branchNameOverride.startsWith('-')) {
     throw new Error('Branch name must not start with "-"')
@@ -125,10 +120,10 @@ async function resolveCreateBranchNameSsh(
   branchNameOverride: string | undefined,
   sanitizedName: string,
   settings: { branchPrefix: string; branchPrefixCustom?: string },
-  branchPrefixValue: string | null
+  username: string | null
 ): Promise<string> {
   if (!branchNameOverride) {
-    return computeBranchName(sanitizedName, settings, branchPrefixValue)
+    return computeBranchName(sanitizedName, settings, username)
   }
   if (branchNameOverride.startsWith('-')) {
     throw new Error('Branch name must not start with "-"')
@@ -657,10 +652,14 @@ export async function createRemoteWorktree(
     ? sanitizeWorktreeDisplayName(args.displayName)
     : undefined
 
-  const branchPrefixValue =
-    !args.branchNameOverride && shouldResolveBranchPrefixValue(settings)
-      ? await getSshBranchPrefixValue(provider, repo.path, settings)
-      : ''
+  // Get git username from remote
+  let username = ''
+  try {
+    const { stdout } = await provider.exec(['config', 'user.name'], repo.path)
+    username = stdout.trim()
+  } catch {
+    /* no username configured */
+  }
 
   const branchName = await resolveCreateBranchNameSsh(
     provider,
@@ -668,7 +667,7 @@ export async function createRemoteWorktree(
     args.branchNameOverride,
     sanitizedName,
     settings,
-    branchPrefixValue
+    username
   )
 
   // Compute worktree path relative to the repo's parent on the remote
@@ -968,10 +967,7 @@ export async function createLocalWorktree(
 ): Promise<CreateWorktreeResult> {
   const settings = store.getSettings()
 
-  const branchPrefixValue =
-    !args.branchNameOverride && shouldResolveBranchPrefixValue(settings)
-      ? getLocalBranchPrefixValue(repo.path, settings)
-      : ''
+  const username = getGitUsername(repo.path)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   const requestedDisplayName = args.displayName
@@ -1109,7 +1105,7 @@ export async function createLocalWorktree(
             : undefined,
       effectiveSanitizedName,
       settings,
-      branchPrefixValue
+      username
     )
     checkoutExistingBranch = await canCheckoutExistingLocalBranch(repo.path, branchName, baseBranch)
     if (checkoutExistingBranch && !selectedExistingLocalBranchName) {

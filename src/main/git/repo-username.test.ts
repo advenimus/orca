@@ -16,16 +16,13 @@ vi.mock('child_process', async () => {
 
 describe('getGitUsername', () => {
   let gitConfig: Record<string, string>
-  let originRemoteUrl: string | undefined
   let getGitUsername: typeof RepoModule.getGitUsername
-  let getGitAuthorPrefix: typeof RepoModule.getGitAuthorPrefix
 
   beforeEach(async () => {
     vi.resetModules()
     execSyncMock.mockReset()
     execFileSyncMock.mockReset()
     gitConfig = {}
-    originRemoteUrl = undefined
 
     execFileSyncMock.mockImplementation((_binary: string, args: string[]) => {
       if (args[0] === 'config' && args[1] === '--get') {
@@ -35,68 +32,21 @@ describe('getGitUsername', () => {
         }
         throw new Error(`missing config ${args[2]}`)
       }
-      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
-        if (originRemoteUrl) {
-          return `${originRemoteUrl}\n`
-        }
-        throw new Error('missing origin remote')
-      }
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
 
-    ;({ getGitUsername, getGitAuthorPrefix } = await import('./repo'))
+    ;({ getGitUsername } = await import('./repo'))
   })
 
-  it('prefers explicit GitHub user config over the GitHub CLI login', () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    gitConfig['github.user'] = 'config-demo'
-    execSyncMock.mockImplementationOnce(() => 'gh-demo\n')
-
-    expect(getGitUsername('/repo')).toBe('config-demo')
-    expect(execSyncMock).not.toHaveBeenCalled()
-  })
-
-  it('uses explicit username config before probing the GitHub CLI login', () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    gitConfig['user.username'] = 'repo-demo'
-    execSyncMock.mockImplementationOnce(() => 'gh-demo\n')
-
-    expect(getGitUsername('/repo')).toBe('repo-demo')
-    expect(execSyncMock).not.toHaveBeenCalled()
-  })
-
-  it('prefers GitHub CLI login over repo-local author identity', () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
+  it('uses repo-local email before checking GitHub CLI login', () => {
     gitConfig['user.email'] = 'demo@example.com'
     gitConfig['user.name'] = 'Demo User'
-    execSyncMock.mockImplementationOnce(() => 'gh-demo\n')
 
-    expect(getGitUsername('/repo')).toBe('gh-demo')
-    expect(execSyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('ignores repo-local author identity for non-GitHub remotes', () => {
-    originRemoteUrl = 'https://gitlab.com/stablyai/orca.git'
-    gitConfig['user.email'] = 'demo@example.com'
-    gitConfig['user.name'] = 'Demo User'
-    execSyncMock.mockImplementationOnce(() => 'gh-demo\n')
-
-    expect(getGitUsername('/repo')).toBe('')
-    expect(execSyncMock).not.toHaveBeenCalled()
-  })
-
-  it('resolves repo-local author identity only for git-author prefixes', () => {
-    originRemoteUrl = 'https://gitlab.com/stablyai/orca.git'
-    gitConfig['user.email'] = 'demo@example.com'
-    gitConfig['user.name'] = 'Demo User'
-    execSyncMock.mockImplementationOnce(() => 'gh-demo\n')
-
-    expect(getGitAuthorPrefix('/repo')).toBe('Demo-User')
+    expect(getGitUsername('/repo')).toBe('demo')
     expect(execSyncMock).not.toHaveBeenCalled()
   })
 
   it('bounds and caches failed GitHub CLI lookup', () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
     execSyncMock.mockImplementation(() => {
       throw new Error('gh unavailable')
     })
@@ -111,7 +61,6 @@ describe('getGitUsername', () => {
   })
 
   it('skips auth status fallback when GitHub CLI API lookup times out', () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
     execSyncMock.mockImplementationOnce(() => {
       throw Object.assign(new Error('spawnSync /bin/sh ETIMEDOUT'), { code: 'ETIMEDOUT' })
     })
@@ -124,7 +73,6 @@ describe('getGitUsername', () => {
   })
 
   it('uses auth status fallback after fast GitHub CLI API failure', () => {
-    originRemoteUrl = 'https://github.com/stablyai/orca.git'
     execSyncMock
       .mockImplementationOnce(() => {
         throw new Error('gh api unavailable')

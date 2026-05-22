@@ -34,7 +34,7 @@ function makeStore(existingAutomations: Automation[] = []) {
       workspaceDir: '/tmp',
       nestWorkspaces: false,
       refreshLocalBaseRefOnWorktreeCreate: false,
-      branchPrefix: 'none',
+      branchPrefix: '',
       branchPrefixCustom: ''
     })),
     getAllWorktreeMeta: vi.fn(() => new Map()),

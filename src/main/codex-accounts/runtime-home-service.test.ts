@@ -36,7 +36,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
-    branchPrefix: 'github-username',
+    branchPrefix: 'git-username',
     branchPrefixCustom: '',
     theme: 'system',
     editorAutoSave: false,

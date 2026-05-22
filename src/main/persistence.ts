@@ -89,7 +89,6 @@ import {
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
-import { normalizeBranchPrefixMode } from '../shared/branch-prefix'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -1156,12 +1155,6 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
-type RepoHydrationOptions = {
-  // Why: background/create paths often need only persisted repo metadata; resolving
-  // the displayed username can synchronously probe git/gh and block the caller.
-  includeGitUsername?: boolean
-}
-
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -1408,10 +1401,6 @@ export class Store {
           parsed.settings?.primarySelectionMiddleClickPasteDefaultedForLinux === true
         const primarySelectionDefaultedForTerminalDefaults =
           parsed.settings?.primarySelectionMiddleClickPasteDefaultedForTerminalDefaults === true
-        const persistedBranchPrefix = parsed.settings?.branchPrefix as unknown
-        if (persistedBranchPrefix === 'git-username') {
-          this.loadNeedsSave = true
-        }
         const primarySelectionPlatformDefaultEnabled =
           defaults.settings.primarySelectionMiddleClickPaste === true
         const primarySelectionAlreadyDefaultedForPlatform =
@@ -1431,7 +1420,6 @@ export class Store {
           settings: {
             ...defaults.settings,
             ...parsed.settings,
-            branchPrefix: normalizeBranchPrefixMode(parsed.settings?.branchPrefix),
             // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:
@@ -1889,24 +1877,23 @@ export class Store {
 
   // ── Repos ──────────────────────────────────────────────────────────
 
-  getRepos(options: RepoHydrationOptions = { includeGitUsername: false }): Repo[] {
-    return this.state.repos.map((repo) => this.hydrateRepo(repo, options))
+  getRepos(): Repo[] {
+    return this.state.repos.map((repo) => this.hydrateRepo(repo))
   }
 
   /**
-   * O(1) read of the persisted repo count. Use this when you only need the count
-   * (e.g. cohort-classifier) instead of allocating hydrated repo objects.
+   * O(1) read of the persisted repo count. Use this when you only need the
+   * count (e.g. cohort-classifier) — `getRepos()` hydrates each repo and
+   * may run a synchronous git subprocess via `getGitUsername()`, which is
+   * wasteful when the caller only reads `.length`.
    */
   getRepoCount(): number {
     return this.state.repos.length
   }
 
-  getRepo(
-    id: string,
-    options: RepoHydrationOptions = { includeGitUsername: false }
-  ): Repo | undefined {
+  getRepo(id: string): Repo | undefined {
     const repo = this.state.repos.find((r) => r.id === id)
-    return repo ? this.hydrateRepo(repo, options) : undefined
+    return repo ? this.hydrateRepo(repo) : undefined
   }
 
   addRepo(repo: Repo): void {
@@ -1978,8 +1965,7 @@ export class Store {
         | 'kind'
         | 'issueSourcePreference'
       >
-    >,
-    options: RepoHydrationOptions = { includeGitUsername: false }
+    >
   ): Repo | null {
     const repo = this.state.repos.find((r) => r.id === id)
     if (!repo) {
@@ -1998,29 +1984,23 @@ export class Store {
       Object.assign(repo, updates)
     }
     this.scheduleSave()
-    return this.hydrateRepo(repo, options)
+    return this.hydrateRepo(repo)
   }
 
-  private hydrateRepo(
-    repo: Repo,
-    options: RepoHydrationOptions = { includeGitUsername: false }
-  ): Repo {
-    const { includeGitUsername = false } = options
-    const gitUsername =
-      !includeGitUsername || isFolderRepo(repo)
-        ? ''
-        : (this.gitUsernameCache.get(repo.path) ??
-          (() => {
-            const username = getGitUsername(repo.path)
-            this.gitUsernameCache.set(repo.path, username)
-            return username
-          })())
-    const { gitUsername: _persistedGitUsername, ...repoWithoutUsername } = repo
+  private hydrateRepo(repo: Repo): Repo {
+    const gitUsername = isFolderRepo(repo)
+      ? ''
+      : (this.gitUsernameCache.get(repo.path) ??
+        (() => {
+          const username = getGitUsername(repo.path)
+          this.gitUsernameCache.set(repo.path, username)
+          return username
+        })())
 
     return {
-      ...repoWithoutUsername,
+      ...repo,
       kind: isFolderRepo(repo) ? 'folder' : 'git',
-      ...(includeGitUsername ? { gitUsername } : {}),
+      gitUsername,
       hookSettings: {
         ...getDefaultRepoHookSettings(),
         ...repo.hookSettings,
@@ -2342,9 +2322,6 @@ export class Store {
 
   updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
     const sanitizedUpdates = { ...updates }
-    if ('branchPrefix' in updates) {
-      sanitizedUpdates.branchPrefix = normalizeBranchPrefixMode(updates.branchPrefix)
-    }
     if ('terminalQuickCommands' in updates) {
       sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
         updates.terminalQuickCommands

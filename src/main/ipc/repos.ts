@@ -32,8 +32,6 @@ import {
   searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
-import { getSshGitUsername } from '../git/git-username'
-import { getLocalBranchPrefixValue, getSshBranchPrefixValue } from '../git/branch-prefix-value'
 import { getActiveMultiplexer } from './ssh'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
@@ -89,8 +87,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('sparsePresets:save')
   ipcMain.removeHandler('sparsePresets:remove')
 
-  ipcMain.handle('repos:list', (_event, args?: { includeGitUsername?: boolean }) => {
-    return store.getRepos({ includeGitUsername: args?.includeGitUsername !== false })
+  ipcMain.handle('repos:list', () => {
+    return store.getRepos()
   })
 
   ipcMain.handle(
@@ -496,7 +494,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           delete updates.symlinkPaths
         }
       }
-      const updated = store.updateRepo(args.repoId, updates, { includeGitUsername: true })
+      const updated = store.updateRepo(args.repoId, updates)
       if (updated) {
         notifyReposChanged(mainWindow)
       }
@@ -708,36 +706,26 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   )
 
   ipcMain.handle('repos:getGitUsername', async (_event, args: { repoId: string }) => {
-    const repo = store.getRepo(args.repoId, { includeGitUsername: false })
+    const repo = store.getRepo(args.repoId)
     if (!repo || isFolderRepo(repo)) {
       return ''
     }
-    // Why: remote repos have their git config on the remote host, so the
-    // preview must use the same relay-backed username order as worktree create.
+    // Why: remote repos have their git config on the remote host, so we
+    // must route through the relay's git.exec to read user.name.
     if (repo.connectionId) {
       const provider = getSshGitProvider(repo.connectionId)
       if (!provider) {
         return ''
       }
-      return getSshGitUsername(provider, repo.path)
+      try {
+        const result = await provider.exec(['config', 'user.name'], repo.path)
+        return result.stdout.trim()
+      } catch {
+        return ''
+      }
     }
     return getGitUsername(repo.path)
   })
-
-  ipcMain.handle(
-    'repos:getBranchPrefixValue',
-    async (_event, args: { repoId: string; branchPrefix: string }) => {
-      const repo = store.getRepo(args.repoId, { includeGitUsername: false })
-      if (!repo || isFolderRepo(repo)) {
-        return ''
-      }
-      if (repo.connectionId) {
-        const provider = getSshGitProvider(repo.connectionId)
-        return provider ? getSshBranchPrefixValue(provider, repo.path, args) : ''
-      }
-      return getLocalBranchPrefixValue(repo.path, args)
-    }
-  )
 
   ipcMain.handle(
     'repos:getBaseRefDefault',

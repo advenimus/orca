@@ -232,7 +232,7 @@ describe('Store', () => {
   it('returns default settings when no data file exists', async () => {
     const store = await createStore()
     const settings = store.getSettings()
-    expect(settings.branchPrefix).toBe('github-username')
+    expect(settings.branchPrefix).toBe('git-username')
     expect(settings.refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(settings.theme).toBe('system')
     expect(settings.appFontFamily).toBe('Geist')
@@ -305,7 +305,7 @@ describe('Store', () => {
     })
 
     const store = await createStore()
-    const repos = store.getRepos({ includeGitUsername: true })
+    const repos = store.getRepos()
     expect(repos).toHaveLength(1)
     expect(repos[0].id).toBe('r1')
     expect(repos[0].gitUsername).toBe('testuser')
@@ -1287,33 +1287,7 @@ describe('Store', () => {
     const fetched = store.getRepo('r1')
     expect(fetched).toBeDefined()
     expect(fetched!.displayName).toBe('test')
-    expect(fetched!.gitUsername).toBeUndefined()
-  })
-
-  it('hydrates git username when explicitly requested', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-
-    const fetched = store.getRepo('r1', { includeGitUsername: true })
-    const repos = store.getRepos({ includeGitUsername: true })
-
     expect(fetched!.gitUsername).toBe('testuser')
-    expect(repos[0].gitUsername).toBe('testuser')
-  })
-
-  it('reads repos without hydrating git username by default', async () => {
-    const store = await createStore()
-    const { getGitUsername } = await import('./git/repo')
-    vi.mocked(getGitUsername).mockClear()
-    store.addRepo(makeRepo())
-
-    const fetched = store.getRepo('r1')
-    const repos = store.getRepos()
-
-    expect(fetched).toMatchObject({ id: 'r1', displayName: 'test' })
-    expect(fetched!.gitUsername).toBeUndefined()
-    expect(repos[0].gitUsername).toBeUndefined()
-    expect(getGitUsername).not.toHaveBeenCalled()
   })
 
   it('getRepo returns undefined for nonexistent id', async () => {
@@ -1464,7 +1438,7 @@ describe('Store', () => {
     expect(updated.terminalFontSize).toBe(16)
     expect(updated.terminalFontWeight).toBe(600)
     // Other fields preserved
-    expect(updated.branchPrefix).toBe('github-username')
+    expect(updated.branchPrefix).toBe('git-username')
   })
 
   it('updateSettings normalizes open-in applications', async () => {

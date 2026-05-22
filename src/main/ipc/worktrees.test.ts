@@ -10,7 +10,6 @@ const {
   addSparseWorktreeMock,
   removeWorktreeMock,
   getGitUsernameMock,
-  getBranchPrefixValueMock,
   getDefaultBaseRefMock,
   getDefaultRemoteMock,
   getBranchConflictKindMock,
@@ -44,7 +43,6 @@ const {
   addSparseWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
   getGitUsernameMock: vi.fn(),
-  getBranchPrefixValueMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
   getDefaultRemoteMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
@@ -93,7 +91,6 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('../git/repo', () => ({
   getGitUsername: getGitUsernameMock,
-  getBranchPrefixValue: getBranchPrefixValueMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
   getDefaultRemote: getDefaultRemoteMock,
   getBranchConflictKind: getBranchConflictKindMock
@@ -220,7 +217,6 @@ describe('registerWorktreeHandlers', () => {
       addSparseWorktreeMock,
       removeWorktreeMock,
       getGitUsernameMock,
-      getBranchPrefixValueMock,
       getDefaultBaseRefMock,
       getDefaultRemoteMock,
       getBranchConflictKindMock,
@@ -298,9 +294,6 @@ describe('registerWorktreeHandlers', () => {
     store.setWorktreeMeta.mockReturnValue({})
     store.getAllWorktreeLineage.mockReturnValue({})
     getGitUsernameMock.mockReturnValue('')
-    getBranchPrefixValueMock.mockImplementation((_repoPath: string, mode: string) =>
-      mode === 'github-username' ? getGitUsernameMock() : ''
-    )
     getDefaultBaseRefMock.mockReturnValue('origin/main')
     getDefaultRemoteMock.mockResolvedValue('origin')
     getBranchConflictKindMock.mockResolvedValue(null)
@@ -458,13 +451,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('uses branchNameOverride for the git branch while keeping the sanitized worktree path', async () => {
-    store.getSettings.mockReturnValue({
-      branchPrefix: 'github-username',
-      branchPrefixCustom: '',
-      nestWorkspaces: false,
-      refreshLocalBaseRefOnWorktreeCreate: false,
-      workspaceDir: '/workspace'
-    })
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/feature-something',
@@ -498,8 +484,6 @@ describe('registerWorktreeHandlers', () => {
         branch: 'feature/something'
       })
     })
-    expect(store.getRepo).toHaveBeenCalledWith('repo-1', { includeGitUsername: false })
-    expect(getGitUsernameMock).not.toHaveBeenCalled()
   })
 
   it('checks out a selected existing local branch exactly', async () => {
@@ -1077,84 +1061,6 @@ describe('registerWorktreeHandlers', () => {
         manualOrder: 123_456
       })
     })
-  })
-
-  it('uses explicit remote username config for SSH GitHub username branch prefixes', async () => {
-    const repo = {
-      id: 'repo-ssh',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'conn-1',
-      worktreeBaseRef: 'origin/main'
-    }
-    const provider = {
-      exec: vi.fn().mockImplementation(async (args: string[]) => {
-        if (args[0] === 'config' && args[1] === '--get') {
-          const valueByKey: Record<string, string> = {
-            'user.username': 'brennanb2025',
-            'user.email': 'brennankbenson@gmail.com',
-            'user.name': 'brennanb2025'
-          }
-          const value = valueByKey[args[2]]
-          if (value) {
-            return { stdout: `${value}\n`, stderr: '' }
-          }
-          throw new Error(`missing config ${args[2]}`)
-        }
-        if (args[0] === 'remote') {
-          return { stdout: 'origin\n', stderr: '' }
-        }
-        return { stdout: '', stderr: '' }
-      }),
-      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: '/remote/improve-dashboard',
-          head: 'abc123',
-          branch: 'refs/heads/brennanb2025/improve-dashboard',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-    }
-    const mux = {
-      request: vi.fn().mockResolvedValue(undefined),
-      notify: vi.fn()
-    }
-    store.getRepos.mockReturnValue([repo])
-    store.getRepo.mockReturnValue(repo)
-    store.getSettings.mockReturnValue({
-      branchPrefix: 'github-username',
-      branchPrefixCustom: '',
-      nestWorkspaces: false,
-      refreshLocalBaseRefOnWorktreeCreate: false,
-      workspaceDir: '/workspace'
-    })
-    getSshGitProviderMock.mockReturnValue(provider)
-    getActiveMultiplexerMock.mockReturnValue(mux)
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
-
-    await handlers['worktrees:create'](null, {
-      repoId: 'repo-ssh',
-      name: 'improve-dashboard'
-    })
-
-    expect(provider.addWorktree).toHaveBeenCalledWith(
-      '/remote/repo',
-      'brennanb2025/improve-dashboard',
-      '/remote/repo/../improve-dashboard',
-      { base: 'origin/main' }
-    )
-    expect(provider.exec).toHaveBeenCalledWith(['config', '--get', 'github.user'], '/remote/repo')
-    expect(provider.exec).toHaveBeenCalledWith(['config', '--get', 'user.username'], '/remote/repo')
-    expect(provider.exec).not.toHaveBeenCalledWith(
-      ['config', '--get', 'user.email'],
-      '/remote/repo'
-    )
-    expect(provider.exec).not.toHaveBeenCalledWith(['config', '--get', 'user.name'], '/remote/repo')
   })
 
   it('reads remote orca.yaml and returns a setup launch payload during SSH create', async () => {

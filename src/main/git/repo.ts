@@ -4,9 +4,7 @@ import { existsSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
-import { buildHostedRemoteFileUrl, parseHostedRemote } from './hosted-remote-url'
-import { normalizeGitUsername } from './git-username'
-import type { BranchPrefixMode } from '../../shared/branch-prefix'
+import { buildHostedRemoteFileUrl } from './hosted-remote-url'
 
 const GH_LOGIN_TIMEOUT_MS = 2500
 
@@ -108,6 +106,16 @@ function getGitConfigValue(path: string, key: string): string {
   }
 }
 
+function normalizeUsername(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  const localPart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed
+  return localPart.replace(/^\d+\+/, '')
+}
+
 let cachedGhLogin: string | undefined
 
 function isGhProbeTimeout(error: unknown): boolean {
@@ -134,7 +142,7 @@ function getGhLogin(): string {
       timeout: GH_LOGIN_TIMEOUT_MS
     }).trim()
     if (apiLogin) {
-      cachedGhLogin = normalizeGitUsername(apiLogin)
+      cachedGhLogin = normalizeUsername(apiLogin)
       return cachedGhLogin
     }
   } catch (err) {
@@ -161,12 +169,12 @@ function getGhLogin(): string {
       /Active account:\s+true[\s\S]*?account\s+([A-Za-z0-9-]+)/
     )
     if (activeAccountMatch?.[1]) {
-      cachedGhLogin = normalizeGitUsername(activeAccountMatch[1])
+      cachedGhLogin = normalizeUsername(activeAccountMatch[1])
       return cachedGhLogin
     }
 
     const accountMatch = output.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)
-    const login = normalizeGitUsername(accountMatch?.[1] ?? '')
+    const login = normalizeUsername(accountMatch?.[1] ?? '')
     if (login) {
       cachedGhLogin = login
     }
@@ -179,46 +187,19 @@ function getGhLogin(): string {
   }
 }
 
-function getGhLoginForGitHubRemote(path: string): string {
-  const remoteUrl = getRemoteUrl(path)
-  if (parseHostedRemote(remoteUrl ?? '')?.provider !== 'github') {
-    // Why: a local `gh` account is only a valid branch-prefix identity for
-    // GitHub repos; using it for GitLab/Bitbucket remotes leaks the wrong host.
-    return ''
-  }
-
-  return getGhLogin()
-}
-
 /**
- * Get the GitHub/explicit username-style branch prefix for the repo.
+ * Get the best username-style branch prefix for the repo.
  */
 export function getGitUsername(path: string): string {
-  // Why: this powers the "GitHub Username" branch prefix. `user.email` and
-  // `user.name` are commit author identity, not hosted-account usernames.
-  return normalizeGitUsername(
+  return normalizeUsername(
     getGitConfigValue(path, 'github.user') ||
       getGitConfigValue(path, 'user.username') ||
-      getGhLoginForGitHubRemote(path)
+      // Why: GitHub CLI login can touch network/keychain state. A repo-local
+      // email is already enough for the branch prefix and keeps repo add fast.
+      getGitConfigValue(path, 'user.email').split('@')[0] ||
+      getGhLogin() ||
+      getGitConfigValue(path, 'user.name')
   )
-}
-
-export function getGitAuthorPrefix(path: string): string {
-  // Why: author-derived prefixes are opt-in and deliberately separate from
-  // "GitHub Username" so display names/emails do not masquerade as logins.
-  return normalizeGitUsername(
-    getGitConfigValue(path, 'user.name') || getGitConfigValue(path, 'user.email')
-  )
-}
-
-export function getBranchPrefixValue(path: string, mode: BranchPrefixMode): string {
-  if (mode === 'github-username') {
-    return getGitUsername(path)
-  }
-  if (mode === 'git-author') {
-    return getGitAuthorPrefix(path)
-  }
-  return ''
 }
 
 function hasGitRef(path: string, ref: string): boolean {

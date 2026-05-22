@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { execFileSync } from 'child_process'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 
 import {
   getDefaultBaseRef,
   getBranchConflictKind,
-  getGitAuthorPrefix,
-  getGitUsername,
   getRemoteCount,
   parseAndFilterSearchRefDetails,
   searchBaseRefDetails,
@@ -47,87 +45,6 @@ function createRemoteRef(mainDir: string, shortName: string, sha: string): void 
 function getHeadSha(dir: string): string {
   return git(dir, ['rev-parse', 'HEAD']).trim()
 }
-
-function installFakeGh(binDir: string, login: string): void {
-  if (process.platform === 'win32') {
-    writeFileSync(
-      path.join(binDir, 'gh.cmd'),
-      `@echo off\r\nif "%1"=="api" (\r\n  echo ${login}\r\n  exit /b 0\r\n)\r\necho Logged in to github.com account ${login}\r\necho   - Active account: true\r\n`
-    )
-    return
-  }
-
-  const ghPath = path.join(binDir, 'gh')
-  writeFileSync(
-    ghPath,
-    `#!/bin/sh
-if [ "$1" = "api" ]; then
-  echo "${login}"
-  exit 0
-fi
-cat <<'EOF'
-github.com
-  * Logged in to github.com account ${login}
-  - Active account: true
-EOF
-`
-  )
-  chmodSync(ghPath, 0o755)
-}
-
-describe('getGitUsername', () => {
-  let tmpDir: string
-  let binDir: string
-  let originalPath: string | undefined
-
-  beforeEach(() => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'orca-repo-test-'))
-    binDir = mkdtempSync(path.join(tmpdir(), 'orca-gh-test-'))
-    originalPath = process.env.PATH
-    initRepo(tmpDir)
-  })
-
-  afterEach(() => {
-    process.env.PATH = originalPath
-    rmSync(tmpDir, { recursive: true, force: true })
-    rmSync(binDir, { recursive: true, force: true })
-  })
-
-  it('prefers the GitHub CLI login over git author identity', () => {
-    installFakeGh(binDir, 'gh-login-wins')
-    git(tmpDir, ['remote', 'add', 'origin', 'https://github.com/stablyai/orca.git'])
-    git(tmpDir, ['config', 'user.email', 'email-local@example.com'])
-    git(tmpDir, ['config', 'user.name', 'Brennan Benson'])
-    process.env.PATH = originalPath ? `${binDir}${path.delimiter}${originalPath}` : binDir
-
-    const username = getGitUsername(tmpDir)
-
-    expect(username).toBe('gh-login-wins')
-  })
-
-  it('ignores git author identity for non-GitHub username prefixes', () => {
-    installFakeGh(binDir, 'gh-login-ignored')
-    git(tmpDir, ['remote', 'add', 'origin', 'https://gitlab.com/stablyai/orca.git'])
-    git(tmpDir, ['config', 'user.email', 'email-local@example.com'])
-    process.env.PATH = originalPath ? `${binDir}${path.delimiter}${originalPath}` : binDir
-
-    const username = getGitUsername(tmpDir)
-
-    expect(username).toBe('')
-  })
-
-  it('keeps git author identity available for git-author prefixes', () => {
-    installFakeGh(binDir, 'gh-login-ignored')
-    git(tmpDir, ['remote', 'add', 'origin', 'https://gitlab.com/stablyai/orca.git'])
-    git(tmpDir, ['config', 'user.email', 'email-local@example.com'])
-    git(tmpDir, ['config', 'user.name', 'Brennan Benson'])
-    process.env.PATH = originalPath ? `${binDir}${path.delimiter}${originalPath}` : binDir
-
-    const prefix = getGitAuthorPrefix(tmpDir)
-
-    expect(prefix).toBe('Brennan-Benson')
-  })
-})
 
 describe('searchBaseRefs (widened glob)', () => {
   let tmpDir: string

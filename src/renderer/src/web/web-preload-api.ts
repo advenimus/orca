@@ -591,7 +591,7 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
 
 function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
-    list: async (args) => (await callRuntimeResult<{ repos: Repo[] }>('repo.list', args)).repos,
+    list: async () => (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos,
     add: async ({ path, kind }) => callRuntimeResult('repo.add', { path, kind }),
     remove: async ({ repoId }) => {
       await callRuntimeResult('repo.rm', { repo: repoId })
@@ -623,16 +623,7 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     create: async ({ parentPath, name, kind }) =>
       callRuntimeResult('repo.create', { parentPath, name, kind }),
     onCloneProgress: () => noopUnsubscribe,
-    getGitUsername: async ({ repoId }) =>
-      (await callRuntimeResult<{ username: string }>('repo.gitUsername', { repo: repoId }))
-        .username,
-    getBranchPrefixValue: async ({ repoId, branchPrefix }) =>
-      (
-        await callRuntimeResult<{ value: string }>('repo.branchPrefixValue', {
-          repo: repoId,
-          branchPrefix
-        })
-      ).value,
+    getGitUsername: () => Promise.resolve(''),
     getBaseRefDefault: async ({ repoId }) =>
       callRuntimeResult('repo.baseRefDefault', { repo: repoId }),
     searchBaseRefs: async ({ repoId, query, limit }) =>

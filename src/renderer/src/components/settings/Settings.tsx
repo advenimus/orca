@@ -91,8 +91,6 @@ import {
   getInitialMountedSectionIds,
   getRuntimeTargetIdentity
 } from './settings-load-performance'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { branchPrefixModeNeedsResolvedValue } from '../../../../shared/branch-prefix'
 
 type SettingsNavTarget =
   | 'general'
@@ -260,7 +258,6 @@ function Settings(): React.JSX.Element {
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
-  const [branchPrefixValueByKey, setBranchPrefixValueByKey] = useState<Record<string, string>>({})
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
     getInitialMountedSectionIds
   )
@@ -437,6 +434,7 @@ function Settings(): React.JSX.Element {
     applyDocumentTheme(theme)
   }, [])
 
+  const displayedGitUsername = repos[0]?.gitUsername ?? ''
   const runtimeEnvironmentsSearchEntry = isWebClient
     ? WEB_RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
     : RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
@@ -699,89 +697,6 @@ function Settings(): React.JSX.Element {
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows && neededSectionIds.has('terminal')
   )
-  const branchPrefixRepo = repos[0] && !isFolderRepo(repos[0]) ? repos[0] : null
-  const branchPrefixRepoId = branchPrefixRepo?.id
-  const branchPrefixMode = settings?.branchPrefix
-  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId
-  const branchPrefixCacheKey =
-    branchPrefixRepoId !== undefined && branchPrefixMode !== undefined
-      ? `${activeRuntimeEnvironmentId ?? 'local'}:${branchPrefixRepoId}:${branchPrefixMode}`
-      : undefined
-  const hydratedBranchPrefixValue =
-    branchPrefixMode === 'github-username' ? branchPrefixRepo?.gitUsername : undefined
-  const cachedBranchPrefixValue =
-    branchPrefixCacheKey !== undefined ? branchPrefixValueByKey[branchPrefixCacheKey] : undefined
-  const displayedBranchPrefixValue = hydratedBranchPrefixValue ?? cachedBranchPrefixValue ?? ''
-
-  useEffect(() => {
-    if (
-      settings === null ||
-      !branchPrefixModeNeedsResolvedValue(settings.branchPrefix) ||
-      !neededSectionIds.has('git') ||
-      branchPrefixRepoId === undefined ||
-      branchPrefixCacheKey === undefined ||
-      hydratedBranchPrefixValue !== undefined ||
-      cachedBranchPrefixValue !== undefined
-    ) {
-      return
-    }
-
-    let cancelled = false
-    const fetchBranchPrefixValue = async (): Promise<string> => {
-      const target = getActiveRuntimeTarget({
-        activeRuntimeEnvironmentId: activeRuntimeEnvironmentId ?? null
-      })
-      if (target.kind === 'local') {
-        return window.api.repos.getBranchPrefixValue({
-          repoId: branchPrefixRepoId,
-          branchPrefix: settings.branchPrefix
-        })
-      }
-      const result = await callRuntimeRpc<{ value: string }>(
-        target,
-        'repo.branchPrefixValue',
-        { repo: `id:${branchPrefixRepoId}`, branchPrefix: settings.branchPrefix },
-        { timeoutMs: 15_000 }
-      )
-      return result.value
-    }
-    // Why: repo listing is a startup path, so prefix probing stays lazy and
-    // only runs for the Git settings preview that actually displays it.
-    void fetchBranchPrefixValue()
-      .then((value) => {
-        if (cancelled) {
-          return
-        }
-        setBranchPrefixValueByKey((previous) =>
-          previous[branchPrefixCacheKey] === value
-            ? previous
-            : { ...previous, [branchPrefixCacheKey]: value }
-        )
-      })
-      .catch((error) => {
-        console.error('Failed to fetch branch prefix value:', error)
-        if (cancelled) {
-          return
-        }
-        setBranchPrefixValueByKey((previous) =>
-          previous[branchPrefixCacheKey] === undefined
-            ? { ...previous, [branchPrefixCacheKey]: '' }
-            : previous
-        )
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [
-    cachedBranchPrefixValue,
-    activeRuntimeEnvironmentId,
-    branchPrefixCacheKey,
-    branchPrefixRepoId,
-    hydratedBranchPrefixValue,
-    neededSectionIds,
-    settings
-  ])
 
   useEffect(() => {
     setMountedSectionIds((previous) => {
@@ -1124,7 +1039,7 @@ function Settings(): React.JSX.Element {
                       <GitPane
                         settings={settings}
                         updateSettings={updateSettings}
-                        displayedBranchPrefixValue={displayedBranchPrefixValue}
+                        displayedGitUsername={displayedGitUsername}
                       />
                       <CommitMessageAiPane
                         settings={settings}

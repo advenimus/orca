@@ -152,7 +152,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     workspaceDir: `${homedir}/orca/workspaces`,
     nestWorkspaces: true,
     refreshLocalBaseRefOnWorktreeCreate: false,
-    branchPrefix: 'github-username',
+    branchPrefix: 'git-username',
     branchPrefixCustom: '',
     enableGitHubAttribution: false,
     theme: 'system',

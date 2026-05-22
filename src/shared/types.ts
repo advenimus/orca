@@ -15,7 +15,6 @@ import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides } from './keybindings'
-import type { BranchPrefixMode } from './branch-prefix'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1520,7 +1519,7 @@ export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
   refreshLocalBaseRefOnWorktreeCreate: boolean
-  branchPrefix: BranchPrefixMode
+  branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'

@@ -1,24 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from '../../../preload/api-types'
 
-const webRuntimeClientMocks = vi.hoisted(() => ({
-  call: vi.fn(),
-  close: vi.fn(),
-  subscribe: vi.fn()
-}))
-
-vi.mock('./web-runtime-client', () => ({
-  WebRuntimeClient: vi.fn().mockImplementation(function () {
-    return {
-      call: webRuntimeClientMocks.call,
-      close: webRuntimeClientMocks.close,
-      subscribe: webRuntimeClientMocks.subscribe
-    }
-  })
-}))
-
-const WEB_RUNTIME_ENVIRONMENT_STORAGE_KEY = 'orca.web.runtimeEnvironment.v1'
-
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>()
 
@@ -83,34 +65,9 @@ async function installApi(userAgent?: string): Promise<{
   }
 }
 
-function makeStoredRuntimeEnvironment(): unknown {
-  return {
-    id: 'web-test',
-    name: 'Test Runtime',
-    createdAt: 1,
-    updatedAt: 1,
-    lastUsedAt: null,
-    runtimeId: null,
-    preferredEndpointId: 'ws-web-test',
-    endpoints: [
-      {
-        id: 'ws-web-test',
-        kind: 'websocket',
-        label: 'WebSocket',
-        endpoint: 'ws://127.0.0.1:1234',
-        deviceToken: 'device-token',
-        publicKeyB64: 'public-key'
-      }
-    ]
-  }
-}
-
 describe('web keybindings preload API', () => {
   beforeEach(() => {
     vi.resetModules()
-    webRuntimeClientMocks.call.mockReset()
-    webRuntimeClientMocks.close.mockReset()
-    webRuntimeClientMocks.subscribe.mockReset()
   })
 
   afterEach(() => {
@@ -182,62 +139,5 @@ describe('web keybindings preload API', () => {
     )
 
     unsubscribe()
-  })
-})
-
-describe('web repos preload API', () => {
-  beforeEach(() => {
-    vi.resetModules()
-    webRuntimeClientMocks.call.mockReset()
-    webRuntimeClientMocks.close.mockReset()
-    webRuntimeClientMocks.subscribe.mockReset()
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('routes git username lookup through the paired runtime', async () => {
-    const { api, storage } = await installApi('Linux')
-    storage.setItem(
-      WEB_RUNTIME_ENVIRONMENT_STORAGE_KEY,
-      JSON.stringify(makeStoredRuntimeEnvironment())
-    )
-    webRuntimeClientMocks.call.mockResolvedValueOnce({
-      ok: true,
-      result: { username: 'remote-user' },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-
-    await expect(api.repos.getGitUsername({ repoId: 'repo-1' })).resolves.toBe('remote-user')
-
-    expect(webRuntimeClientMocks.call).toHaveBeenCalledWith(
-      'repo.gitUsername',
-      { repo: 'repo-1' },
-      { timeoutMs: undefined }
-    )
-  })
-
-  it('routes branch prefix value lookup through the paired runtime', async () => {
-    const { api, storage } = await installApi('Linux')
-    storage.setItem(
-      WEB_RUNTIME_ENVIRONMENT_STORAGE_KEY,
-      JSON.stringify(makeStoredRuntimeEnvironment())
-    )
-    webRuntimeClientMocks.call.mockResolvedValueOnce({
-      ok: true,
-      result: { value: 'Remote-User' },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-
-    await expect(
-      api.repos.getBranchPrefixValue({ repoId: 'repo-1', branchPrefix: 'git-author' })
-    ).resolves.toBe('Remote-User')
-
-    expect(webRuntimeClientMocks.call).toHaveBeenCalledWith(
-      'repo.branchPrefixValue',
-      { repo: 'repo-1', branchPrefix: 'git-author' },
-      { timeoutMs: undefined }
-    )
   })
 })

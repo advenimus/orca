@@ -3,10 +3,6 @@ import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getWslHome, parseWslPath } from '../wsl'
-import {
-  branchPrefixModeNeedsResolvedValue,
-  normalizeBranchPrefixMode
-} from '../../shared/branch-prefix'
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
@@ -74,11 +70,11 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
 export function computeBranchName(
   sanitizedName: string,
   settings: { branchPrefix: string; branchPrefixCustom?: string },
-  resolvedBranchPrefix: string | null
+  gitUsername: string | null
 ): string {
-  if (branchPrefixModeNeedsResolvedValue(normalizeBranchPrefixMode(settings.branchPrefix))) {
-    if (resolvedBranchPrefix) {
-      return `${resolvedBranchPrefix}/${sanitizedName}`
+  if (settings.branchPrefix === 'git-username') {
+    if (gitUsername) {
+      return `${gitUsername}/${sanitizedName}`
     }
   } else if (settings.branchPrefix === 'custom' && settings.branchPrefixCustom) {
     return `${settings.branchPrefixCustom}/${sanitizedName}`
