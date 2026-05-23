@@ -151,7 +151,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).not.toContain('aria-label="Sleep workspace"')
   })
 
-  it('shows sleep as an overlay as soon as the modifier is held', async () => {
+  it('shows sleep in the reserved header slot as soon as the modifier is held', async () => {
     const { default: WorktreeCard } = await import('./WorktreeCard')
     const worktree = makeWorktree()
     isSleepQuickActionModifierPressed = true
@@ -162,11 +162,15 @@ describe('WorktreeCard quick actions', () => {
       <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
     )
     const sleepButton = markup.match(/<button[^>]*aria-label="Sleep workspace"[^>]*>/)?.[0]
+    const sleepHeaderSlot = markup.match(
+      /<div class="ml-auto flex shrink-0 items-center justify-center"><button[^>]*aria-label="Sleep workspace"[^>]*>/
+    )?.[0]
 
     expect(sleepButton).toBeDefined()
     expect(sleepButton).not.toContain('group-hover')
     expect(sleepButton).not.toContain('opacity-0')
-    expect(markup).toContain('absolute right-3 top-1.5')
+    expect(sleepHeaderSlot).toBeDefined()
+    expect(markup).not.toContain('absolute right-3 top-1.5')
   })
 
   it('does not show sleep without live activity even when the modifier is held', async () => {
