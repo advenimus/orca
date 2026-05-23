@@ -47,7 +47,7 @@ import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import { runSleepWorktree } from './sleep-worktree-flow'
 import { getWorkspaceQuickActionKind } from './worktree-card-quick-action'
-import { useMacOptionKeyPressed } from './mac-option-key-state'
+import { useAltKeyPressed } from './alt-key-state'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -160,7 +160,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   })
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
-  const isSleepQuickActionModifierPressed = useMacOptionKeyPressed()
+  const isSleepQuickActionModifierPressed = useAltKeyPressed()
 
   // Why: on restart the previously-active worktree is auto-restored without a
   // click, so the dialog never opens. Auto-show it for the active card when SSH
@@ -416,6 +416,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     hasActiveActivity,
     isSleepQuickActionModifierPressed
   })
+  const showWorkspaceQuickAction = quickActionKind !== null && !isDeleting
   const handleWorkspaceQuickAction = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
@@ -555,6 +556,32 @@ const WorktreeCard = React.memo(function WorktreeCard({
       onDragEnd={nativeDragEnabled ? onCardDragEnd : undefined}
       aria-busy={isDeleting}
     >
+      {showWorkspaceQuickAction && (
+        <div className="pointer-events-none absolute right-3 top-1.5 z-[1] flex size-4 items-center justify-center">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                data-workspace-board-preserve-open=""
+                onPointerDown={stopQuickActionPointerPropagation}
+                onClick={handleWorkspaceQuickAction}
+                className={cn(
+                  'pointer-events-auto inline-flex size-4 items-center justify-center rounded bg-sidebar/95 text-muted-foreground transition-colors',
+                  'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring'
+                )}
+                aria-label={quickActionLabel}
+              >
+                <Moon className="size-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              Sleep workspace
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
+
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
@@ -684,32 +711,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
               </Tooltip>
             )}
           </div>
-
-          {quickActionKind && !isDeleting && (
-            <div className="ml-auto flex shrink-0 items-center justify-center pr-1.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    data-workspace-board-preserve-open=""
-                    onPointerDown={stopQuickActionPointerPropagation}
-                    onClick={handleWorkspaceQuickAction}
-                    className={cn(
-                      'inline-flex size-4 items-center justify-center rounded bg-transparent opacity-0 transition-colors transition-opacity',
-                      'group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
-                      'text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:bg-transparent focus-visible:text-foreground'
-                    )}
-                    aria-label={quickActionLabel}
-                  >
-                    <Moon className="size-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  Sleep workspace
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          )}
         </div>
 
         {/* Why: the left metadata lane clips before the right metadata badges,

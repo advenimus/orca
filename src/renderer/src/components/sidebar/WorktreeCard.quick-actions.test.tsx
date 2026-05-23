@@ -13,6 +13,7 @@ let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'unread']
 let tabsByWorktree: Record<string, { id: string }[]> = {}
 let ptyIdsByTabId: Record<string, string[]> = {}
 let browserTabsByWorktree: Record<string, { id: string }[]> = {}
+let isSleepQuickActionModifierPressed = false
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -69,6 +70,10 @@ vi.mock('./WorktreeContextMenu', () => ({
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
 
+vi.mock('./alt-key-state', () => ({
+  useAltKeyPressed: () => isSleepQuickActionModifierPressed
+}))
+
 function makeRepo(): Repo {
   return {
     id: 'repo-1',
@@ -109,6 +114,7 @@ describe('WorktreeCard quick actions', () => {
     tabsByWorktree = {}
     ptyIdsByTabId = {}
     browserTabsByWorktree = {}
+    isSleepQuickActionModifierPressed = false
   })
 
   it('marks the unread toggle as a workspace-board-preserving action', async () => {
@@ -140,6 +146,35 @@ describe('WorktreeCard quick actions', () => {
 
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).not.toContain('aria-label="Sleep workspace"')
+  })
+
+  it('shows sleep as an overlay as soon as the modifier is held', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+    const worktree = makeWorktree()
+    isSleepQuickActionModifierPressed = true
+    tabsByWorktree = { [worktree.id]: [{ id: 'tab-1' }] }
+    ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+    const sleepButton = markup.match(/<button[^>]*aria-label="Sleep workspace"[^>]*>/)?.[0]
+
+    expect(sleepButton).toBeDefined()
+    expect(sleepButton).not.toContain('group-hover')
+    expect(sleepButton).not.toContain('opacity-0')
+    expect(markup).toContain('absolute right-3 top-1.5')
+  })
+
+  it('does not show sleep without live activity even when the modifier is held', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+    isSleepQuickActionModifierPressed = true
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
     )
 
     expect(markup).not.toContain('aria-label="Sleep workspace"')

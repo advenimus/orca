@@ -25,7 +25,7 @@ function createWindowStub(): {
   }
 }
 
-describe('mac option key state', () => {
+describe('alt key state', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.resetModules()
@@ -33,19 +33,17 @@ describe('mac option key state', () => {
 
   it('shares one window listener set across subscribers and only notifies on value changes', async () => {
     const windowStub = createWindowStub()
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     vi.stubGlobal('window', windowStub)
-    const { getMacOptionKeySnapshot, subscribeMacOptionKey } =
-      await import('./mac-option-key-state')
+    const { getAltKeySnapshot, subscribeAltKey } = await import('./alt-key-state')
     const first = vi.fn()
     const second = vi.fn()
 
-    const unsubscribeFirst = subscribeMacOptionKey(first)
-    const unsubscribeSecond = subscribeMacOptionKey(second)
+    const unsubscribeFirst = subscribeAltKey(first)
+    const unsubscribeSecond = subscribeAltKey(second)
 
     expect(windowStub.addEventListener).toHaveBeenCalledTimes(3)
     windowStub.dispatch('keydown', { altKey: true } as KeyboardEvent)
-    expect(getMacOptionKeySnapshot()).toBe(true)
+    expect(getAltKeySnapshot()).toBe(true)
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).toHaveBeenCalledTimes(1)
 
@@ -61,20 +59,22 @@ describe('mac option key state', () => {
 
     unsubscribeSecond()
     expect(windowStub.removeEventListener).toHaveBeenCalledTimes(3)
-    expect(getMacOptionKeySnapshot()).toBe(false)
+    expect(getAltKeySnapshot()).toBe(false)
   })
 
-  it('does not attach keyboard listeners on non-mac platforms', async () => {
+  it('tracks Alt on non-Mac platforms too', async () => {
     const windowStub = createWindowStub()
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
     vi.stubGlobal('window', windowStub)
-    const { getMacOptionKeySnapshot, subscribeMacOptionKey } =
-      await import('./mac-option-key-state')
+    const { getAltKeySnapshot, subscribeAltKey } = await import('./alt-key-state')
+    const listener = vi.fn()
 
-    const unsubscribe = subscribeMacOptionKey(vi.fn())
+    const unsubscribe = subscribeAltKey(listener)
 
-    expect(windowStub.addEventListener).not.toHaveBeenCalled()
-    expect(getMacOptionKeySnapshot()).toBe(false)
+    expect(windowStub.addEventListener).toHaveBeenCalledTimes(3)
+    windowStub.dispatch('keydown', { altKey: true } as KeyboardEvent)
+    expect(getAltKeySnapshot()).toBe(true)
+    expect(listener).toHaveBeenCalledTimes(1)
     unsubscribe()
   })
 })
