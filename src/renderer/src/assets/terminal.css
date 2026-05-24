@@ -224,13 +224,19 @@
 /* Floating tab style — no full-width background bar. The title sits as a
    lightweight inline label so the terminal content isn't visually "capped."
    Uses muted grey + monospace to read as metadata, not actionable text. */
+.pane-title-overlay-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
 .pane-title-bar {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
+  width: 100%;
   height: var(--orca-pane-title-height);
-  z-index: 5; /* below drag handle (z:10) */
   display: flex;
   align-items: center;
   padding: 0 8px;
@@ -239,6 +245,7 @@
   color: var(--orca-pane-title-fg, rgb(255 255 255 / 0.52));
   background: transparent;
   border-bottom: none;
+  pointer-events: auto;
   user-select: none;
 }
 
