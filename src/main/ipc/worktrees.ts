@@ -79,9 +79,12 @@ import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import {
+  assertWorktreeDoesNotContainRegisteredWorktree,
+  canCleanupUnregisteredOrcaWorktreeDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
-  isWorktreePathMissing
+  isWorktreePathMissing,
+  ORPHANED_WORKTREE_DIRECTORY_MESSAGE
 } from '../worktree-removal-safety'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -947,6 +950,47 @@ export function registerWorktreeHandlers(
           registeredWorktrees
         )
         if (!registeredWorktree) {
+          const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
+          const canCleanOrphanedDirectory =
+            canCleanupUnregisteredOrcaWorktreeDirectory(removedMeta) &&
+            (await canSafelyRemoveOrphanedWorktreeDirectory(
+              worktreePath,
+              repo.path,
+              fsProvider ? (path) => fsProvider.stat(path) : undefined
+            ))
+          if (canCleanOrphanedDirectory) {
+            assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
+            if (!args.force) {
+              throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+            }
+            if (repo.connectionId) {
+              if (!fsProvider) {
+                throw new Error('SSH filesystem provider unavailable')
+              }
+              await fsProvider.deletePath(worktreePath, true)
+              await cleanupUnusedWorktreePushTargetRemoteSsh(
+                provider!,
+                repo.path,
+                args.worktreeId,
+                removedPushTarget,
+                store
+              )
+            } else {
+              await rm(worktreePath, { recursive: true, force: true })
+              await cleanupUnusedWorktreePushTargetRemote(
+                repo.path,
+                args.worktreeId,
+                removedPushTarget,
+                store
+              )
+              invalidateAuthorizedRootsCache()
+            }
+            runtime.clearOptimisticReconcileToken(args.worktreeId)
+            store.removeWorktreeMeta(args.worktreeId)
+            deleteWorktreeHistoryDir(args.worktreeId)
+            notifyWorktreesChanged(mainWindow, repoId)
+            return
+          }
           if (args.force && (await isAlreadyRemovedWorktreePath(repo, worktreePath))) {
             // Why: Force-delete can be retried from stale UI after a prior delete
             // already removed the directory and Git registration. Treat that as

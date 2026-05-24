@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { GitWorktreeInfo } from '../shared/types'
-import { getRegisteredDeletableWorktree, isWorktreePathMissing } from './worktree-removal-safety'
+import {
+  canSafelyRemoveOrphanedWorktreeDirectory,
+  getRegisteredDeletableWorktree,
+  isWorktreePathMissing
+} from './worktree-removal-safety'
 
 function makeGitWorktree(path: string, isMainWorktree = false): GitWorktreeInfo {
   return {
@@ -56,6 +60,25 @@ describe('isWorktreePathMissing', () => {
       isWorktreePathMissing('/unknown', async () => {
         throw new Error('permission denied')
       })
+    ).resolves.toBe(false)
+  })
+})
+
+describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
+  it('accepts remote filesystem provider FileStat entries for a .git file', async () => {
+    await expect(
+      canSafelyRemoveOrphanedWorktreeDirectory('/workspaces/orphan', '/repo', async (path) => {
+        expect(path).toBe('/workspaces/orphan/.git')
+        return { type: 'file' }
+      })
+    ).resolves.toBe(true)
+  })
+
+  it('rejects paths without a worktree .git entry', async () => {
+    await expect(
+      canSafelyRemoveOrphanedWorktreeDirectory('/workspaces/orphan', '/repo', async () => ({
+        type: 'other'
+      }))
     ).resolves.toBe(false)
   })
 })

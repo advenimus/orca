@@ -345,9 +345,12 @@ import {
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
 import {
+  assertWorktreeDoesNotContainRegisteredWorktree,
+  canCleanupUnregisteredOrcaWorktreeDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
-  isWorktreePathMissing
+  isWorktreePathMissing,
+  ORPHANED_WORKTREE_DIRECTORY_MESSAGE
 } from '../worktree-removal-safety'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -8502,6 +8505,7 @@ export class OrcaRuntimeService {
         return {}
       }
       const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
+      const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
       const registeredWorktrees = repo.connectionId
         ? await provider!.listWorktrees(repo.path)
         : await listWorktrees(repo.path)
@@ -8513,6 +8517,46 @@ export class OrcaRuntimeService {
         registeredWorktrees
       )
       if (!registeredWorktree) {
+        const canCleanOrphanedDirectory =
+          canCleanupUnregisteredOrcaWorktreeDirectory(removedMeta) &&
+          (await canSafelyRemoveOrphanedWorktreeDirectory(
+            removalTarget.path,
+            repo.path,
+            fsProvider ? (path) => fsProvider.stat(path) : undefined
+          ))
+        if (canCleanOrphanedDirectory) {
+          assertWorktreeDoesNotContainRegisteredWorktree(removalTarget.path, registeredWorktrees)
+          if (!force) {
+            throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+          }
+          if (repo.connectionId) {
+            if (!fsProvider) {
+              throw new Error('SSH filesystem provider unavailable')
+            }
+            await fsProvider.deletePath(removalTarget.path, true)
+            await cleanupUnusedWorktreePushTargetRemoteSsh(
+              provider!,
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store
+            )
+          } else {
+            await rm(removalTarget.path, { recursive: true, force: true })
+            await cleanupUnusedWorktreePushTargetRemote(
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store
+            )
+          }
+          this.clearOptimisticReconcileToken(removalTarget.id)
+          store.removeWorktreeMeta(removalTarget.id)
+          this.invalidateResolvedWorktreeCache()
+          invalidateAuthorizedRootsCache()
+          this.notifier?.worktreesChanged(repo.id)
+          return {}
+        }
         if (force && (await isRuntimeWorktreePathMissing(repo, removalTarget.path))) {
           // Why: runtime clients can retry a force delete after another surface
           // already removed the worktree. Finish Orca cleanup without touching

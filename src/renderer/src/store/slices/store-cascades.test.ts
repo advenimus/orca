@@ -258,6 +258,31 @@ describe('removeWorktree cascade', () => {
     expect(store.getState().deleteStateByWorktreeId[worktreeId]?.canForceDelete).toBe(false)
   })
 
+  it('offers force delete for orphaned Orca worktree directories', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git but its directory remains."
+      )
+    )
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result.ok).toBe(false)
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]?.canForceDelete).toBe(true)
+  })
+
   it('does NOT affect other worktrees', async () => {
     const store = createTestStore()
     const wt1 = 'repo1::/path/wt1'

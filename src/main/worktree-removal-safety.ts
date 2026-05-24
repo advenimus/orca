@@ -1,10 +1,14 @@
 import { lstat } from 'fs/promises'
 import { homedir } from 'os'
 import { posix, win32 } from 'path'
-import type { GitWorktreeInfo } from '../shared/types'
+import type { GitWorktreeInfo, WorktreeMeta } from '../shared/types'
 import { areWorktreePathsEqual } from './ipc/worktree-logic'
 
 type PathOps = typeof posix
+type StatPath = (path: string) => Promise<unknown>
+
+export const ORPHANED_WORKTREE_DIRECTORY_MESSAGE =
+  'Worktree is no longer registered with Git but its directory remains.'
 
 function looksLikeWindowsPath(pathValue: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
@@ -97,18 +101,41 @@ export function assertWorktreeDoesNotContainRegisteredWorktree(
 
 export async function canSafelyRemoveOrphanedWorktreeDirectory(
   worktreePath: string,
-  repoPath: string
+  repoPath: string,
+  statPath: StatPath = lstat
 ): Promise<boolean> {
   if (isDangerousWorktreeRemovalPath(worktreePath, repoPath)) {
     return false
   }
 
   try {
-    const gitEntry = await lstat(getPathOps(worktreePath).join(worktreePath, '.git'))
-    return gitEntry.isFile() || gitEntry.isDirectory() || gitEntry.isSymbolicLink()
+    const gitEntry = await statPath(getPathOps(worktreePath).join(worktreePath, '.git'))
+    return isGitEntryStat(gitEntry)
   } catch {
     return false
   }
+}
+
+export function canCleanupUnregisteredOrcaWorktreeDirectory(
+  meta: Pick<WorktreeMeta, 'orcaCreatedAt'> | null | undefined
+): boolean {
+  return typeof meta?.orcaCreatedAt === 'number'
+}
+
+function isGitEntryStat(stat: unknown): boolean {
+  if (!stat || typeof stat !== 'object') {
+    return false
+  }
+  const nodeStat = stat as {
+    isFile?: () => boolean
+    isDirectory?: () => boolean
+    isSymbolicLink?: () => boolean
+  }
+  if (nodeStat.isFile?.() || nodeStat.isDirectory?.() || nodeStat.isSymbolicLink?.()) {
+    return true
+  }
+  const fileStat = stat as { type?: unknown }
+  return fileStat.type === 'file' || fileStat.type === 'directory' || fileStat.type === 'symlink'
 }
 
 function isMissingPathError(error: unknown): boolean {
