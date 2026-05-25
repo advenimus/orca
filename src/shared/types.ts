@@ -2220,6 +2220,9 @@ export type PersistedUIState = {
   /** Contextual tours already surfaced to the user. Unknown ids are ignored
    *  during hydration so downgrade/upgrade cycles remain forward-compatible. */
   contextualToursSeenIds?: ContextualTourId[]
+  /** Whether this profile may receive automatic contextual tours from this
+   *  rollout. Missing means the renderer has not classified the profile yet. */
+  contextualToursAutoEligible?: boolean
 }
 
 export const PET_SIZE_MIN = 60

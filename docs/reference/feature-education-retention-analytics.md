@@ -13,6 +13,8 @@ Do not add broad telemetry that mirrors local education state, such as "feature 
 
 Feature adoption analysis should join tour cohorts to existing downstream product events. Add new telemetry only for concrete user actions that are not already represented by an existing event.
 
+Automatic contextual tours are limited to new users for this rollout. The local `contextualToursAutoEligible` flag is set once after persisted UI and onboarding state load: users still in first-run onboarding become eligible; users with closed onboarding become ineligible. This avoids surprising existing users with education for surfaces they may already understand.
+
 ## Product Questions
 
 Use the data to answer:
@@ -147,7 +149,7 @@ At 1,000 DAU, this PR should emit at most:
 - One `contextual_tour_outcome` per shown tour
 - Currently one contextual tour per session
 
-Expected launch volume: under 2,000 events/day at 1,000 DAU, decaying as `contextualToursSeenIds` fills in.
+Expected launch volume: under 2,000 events/day at 1,000 DAU and lower for mature cohorts because existing users are not auto-eligible and `contextualToursSeenIds` fills in for eligible new users.
 
 Do not add recurring, render-loop, polling, passive snapshot, or local-state-mirror events for this analysis.
 
@@ -168,12 +170,13 @@ Payloads must remain low-cardinality and bounded. Do not include:
 
 ## Existing Users
 
-Existing users should not receive a startup blast of education. Tours should remain contextual:
+Existing users should not receive automatic contextual tours from this rollout. We cannot reliably know whether they have already viewed or used every covered surface, so the least surprising default is to leave them alone and measure this launch on new-user cohorts.
 
-- at most one tour per session
-- only after the user enters the relevant surface
-- suppressed during onboarding and blocking dialogs
-- suppressed after the tour has already been surfaced locally
-- suppressed for surfaces where local state proves the user has already interacted, where practical
+Implementation:
 
-For existing-user analysis, compare users by actual tour exposure and outcome, not by install age alone.
+- `contextualToursAutoEligible: false` for profiles whose onboarding is already closed when the rollout first runs
+- `contextualToursAutoEligible: true` for profiles still in first-run onboarding when the rollout first runs
+- automatic tour requests require `contextualToursAutoEligible === true`
+- local `featureInteractions` still records supported surface entry for all users after UI hydration
+
+For existing-user analysis, compare users by actual tour exposure and outcome only when they have exposure. Most existing users should fall into the no-tour baseline for this PR. If a later release adds manual tour entry points or truly new feature education, evaluate that release separately instead of reusing this rollout's eligibility rule.

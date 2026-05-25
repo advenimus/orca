@@ -159,7 +159,8 @@ describe('client UI RPC methods', () => {
       featureInteractions: {
         tasks: { firstInteractedAt: 100 }
       },
-      contextualToursSeenIds: ['tasks']
+      contextualToursSeenIds: ['tasks'],
+      contextualToursAutoEligible: true
     }
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -191,7 +192,8 @@ describe('client UI RPC methods', () => {
       featureInteractions: {
         tasks: { firstInteractedAt: 100 }
       },
-      contextualToursSeenIds: ['tasks']
+      contextualToursSeenIds: ['tasks'],
+      contextualToursAutoEligible: true
     }
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
 

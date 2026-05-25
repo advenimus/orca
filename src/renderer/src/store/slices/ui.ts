@@ -463,12 +463,14 @@ export type UISlice = {
   featureInteractions: FeatureInteractionState
   recordFeatureInteraction: (id: FeatureInteractionId) => void
   contextualToursSeenIds: ContextualTourId[]
+  contextualToursAutoEligible: boolean | null
   activeContextualTourId: ContextualTourId | null
   activeContextualTourStepIndex: number
   activeContextualTourSource: string | null
   contextualTourShownThisSession: boolean
   contextualToursOnboardingVisible: boolean
   contextualToursBlockingSurfaceVisible: boolean
+  setContextualToursAutoEligible: (eligible: boolean) => void
   setContextualToursOnboardingVisible: (visible: boolean) => void
   setContextualToursBlockingSurfaceVisible: (visible: boolean) => void
   requestContextualTour: (id: ContextualTourId, source: string) => void
@@ -932,12 +934,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { featureInteractions: next }
     }),
   contextualToursSeenIds: [],
+  contextualToursAutoEligible: null,
   activeContextualTourId: null,
   activeContextualTourStepIndex: 0,
   activeContextualTourSource: null,
   contextualTourShownThisSession: false,
   contextualToursOnboardingVisible: false,
   contextualToursBlockingSurfaceVisible: false,
+  setContextualToursAutoEligible: (eligible) =>
+    set((s) => {
+      if (s.contextualToursAutoEligible === eligible) {
+        return s
+      }
+      if (typeof window !== 'undefined') {
+        window.api.ui.set({ contextualToursAutoEligible: eligible }).catch(console.error)
+      }
+      return { contextualToursAutoEligible: eligible }
+    }),
   setContextualToursOnboardingVisible: (visible) =>
     set((s) =>
       s.contextualToursOnboardingVisible === visible
@@ -956,6 +969,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const decision = getContextualTourRequestDecision({
         tour,
         persistedUIReady: s.persistedUIReady,
+        autoEligible: s.contextualToursAutoEligible === true,
         onboardingVisible: s.contextualToursOnboardingVisible,
         seenIds: s.contextualToursSeenIds,
         sessionConsumed: s.contextualTourShownThisSession,
@@ -1399,6 +1413,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
         featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),
         contextualToursSeenIds: normalizeContextualTourIds(ui.contextualToursSeenIds),
+        contextualToursAutoEligible:
+          typeof ui.contextualToursAutoEligible === 'boolean'
+            ? ui.contextualToursAutoEligible
+            : null,
         trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
           ui.trustedOrcaHooks ?? {},
           validRepoIds

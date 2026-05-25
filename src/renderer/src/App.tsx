@@ -287,6 +287,7 @@ function App(): React.JSX.Element {
       openModal: s.openModal,
       closeModal: s.closeModal,
       markFeatureTipsSeen: s.markFeatureTipsSeen,
+      setContextualToursAutoEligible: s.setContextualToursAutoEligible,
       setContextualToursOnboardingVisible: s.setContextualToursOnboardingVisible,
       cancelContextualTour: s.cancelContextualTour,
       toggleRightSidebar: s.toggleRightSidebar,
@@ -305,6 +306,7 @@ function App(): React.JSX.Element {
   const activeModal = useAppStore((s) => s.activeModal)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
+  const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   // Why: App swaps the sidebar between workspace and landing layouts when the
   // active workspace is slept/deleted. Keep virtualized scroll memory above
@@ -462,6 +464,15 @@ function App(): React.JSX.Element {
       actions.cancelContextualTour()
     }
   }, [actions, onboarding, onboardingLoaded])
+
+  useEffect(() => {
+    if (!persistedUIReady || !onboardingLoaded || contextualToursAutoEligible !== null) {
+      return
+    }
+    // Why: this rollout is for users who are still in first-run onboarding.
+    // Existing profiles are locally classified once and never auto-toured.
+    actions.setContextualToursAutoEligible(shouldShowOnboarding(onboarding))
+  }, [actions, contextualToursAutoEligible, onboarding, onboardingLoaded, persistedUIReady])
 
   useEffect(() => {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({

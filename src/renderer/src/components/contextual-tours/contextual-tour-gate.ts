@@ -11,6 +11,7 @@ export type ContextualTourRequestDecision =
       kind: 'blocked'
       reason:
         | 'persisted-ui-not-ready'
+        | 'auto-disabled'
         | 'onboarding'
         | 'seen'
         | 'session-consumed'
@@ -125,6 +126,7 @@ export function getNextVisibleContextualTourStepIndex(args: {
 export function getContextualTourRequestDecision(args: {
   tour: ContextualTour
   persistedUIReady: boolean
+  autoEligible: boolean
   onboardingVisible: boolean
   seenIds: readonly string[]
   sessionConsumed: boolean
@@ -135,6 +137,9 @@ export function getContextualTourRequestDecision(args: {
 }): ContextualTourRequestDecision {
   if (!args.persistedUIReady) {
     return { kind: 'blocked', reason: 'persisted-ui-not-ready' }
+  }
+  if (!args.autoEligible) {
+    return { kind: 'blocked', reason: 'auto-disabled' }
   }
   if (args.onboardingVisible) {
     return { kind: 'blocked', reason: 'onboarding' }

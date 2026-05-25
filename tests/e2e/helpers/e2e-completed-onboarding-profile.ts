@@ -36,7 +36,8 @@ export function getE2ECompletedOnboardingProfile() {
           { firstInteractedAt: SEEN_FIRST_RUN_FEATURE_INTERACTION_TIMESTAMP }
         ])
       ),
-      contextualToursSeenIds: [...SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS]
+      contextualToursSeenIds: [...SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS],
+      contextualToursAutoEligible: false
     }
   }
 }

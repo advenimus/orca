@@ -853,6 +853,13 @@ function stubContextualTourTargets(selectors: readonly string[]): void {
 }
 
 describe('createUISlice contextual tours', () => {
+  function makeAutoTourEligibleUI(overrides: Partial<PersistedUIState> = {}): PersistedUIState {
+    return makePersistedUI({
+      contextualToursAutoEligible: true,
+      ...overrides
+    })
+  }
+
   it('normalizes persisted contextual tour ids during hydration', () => {
     const store = createUIStore()
 
@@ -863,6 +870,40 @@ describe('createUISlice contextual tours', () => {
     )
 
     expect(store.getState().contextualToursSeenIds).toEqual(['tasks', 'browser'])
+  })
+
+  it('normalizes persisted contextual tour auto eligibility during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI())
+    expect(store.getState().contextualToursAutoEligible).toBeNull()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ contextualToursAutoEligible: false }))
+    expect(store.getState().contextualToursAutoEligible).toBe(false)
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ contextualToursAutoEligible: 'yes' as never }))
+    expect(store.getState().contextualToursAutoEligible).toBeNull()
+  })
+
+  it('persists contextual tour auto eligibility once classified', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().setContextualToursAutoEligible(false)
+    store.getState().setContextualToursAutoEligible(false)
+
+    expect(store.getState().contextualToursAutoEligible).toBe(false)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ contextualToursAutoEligible: false })
   })
 
   it('marks contextual tours seen and persists them once', () => {
@@ -892,7 +933,7 @@ describe('createUISlice contextual tours', () => {
     store.getState().requestContextualTour('tasks', 'tasks_open')
     expect(store.getState().activeContextualTourId).toBeNull()
 
-    store.getState().hydratePersistedUI(makePersistedUI())
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
     store.getState().requestContextualTour('tasks', 'tasks_open')
 
     expect(store.getState().activeContextualTourId).toBe('tasks')
@@ -905,7 +946,7 @@ describe('createUISlice contextual tours', () => {
   it('does not mark seen when the required first target is absent', () => {
     const store = createUIStore()
     stubContextualTourTargets([])
-    store.getState().hydratePersistedUI(makePersistedUI())
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
 
     store.getState().requestContextualTour('tasks', 'tasks_open')
 
@@ -917,9 +958,20 @@ describe('createUISlice contextual tours', () => {
   it('does not start while a root confirmation surface is visible', () => {
     const store = createUIStore()
     stubContextualTourTargets(['[data-contextual-tour-target="tasks-source-filters"]'])
-    store.getState().hydratePersistedUI(makePersistedUI())
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
 
     store.getState().setContextualToursBlockingSurfaceVisible(true)
+    store.getState().requestContextualTour('tasks', 'tasks_open')
+
+    expect(store.getState().activeContextualTourId).toBeNull()
+    expect(store.getState().contextualTourShownThisSession).toBe(false)
+  })
+
+  it('does not auto-start tours for profiles that are not eligible', () => {
+    const store = createUIStore()
+    stubContextualTourTargets(['[data-contextual-tour-target="tasks-source-filters"]'])
+    store.getState().hydratePersistedUI(makePersistedUI({ contextualToursAutoEligible: false }))
+
     store.getState().requestContextualTour('tasks', 'tasks_open')
 
     expect(store.getState().activeContextualTourId).toBeNull()
@@ -932,7 +984,7 @@ describe('createUISlice contextual tours', () => {
       '[data-contextual-tour-target="workspace-creation-source"]',
       '[data-contextual-tour-target="tasks-source-filters"]'
     ])
-    store.getState().hydratePersistedUI(makePersistedUI())
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
 
     store.getState().openModal('new-workspace-composer')
     store.getState().requestContextualTour('tasks', 'tasks_open')
@@ -949,7 +1001,7 @@ describe('createUISlice contextual tours', () => {
       '[data-contextual-tour-target="browser-annotation-control"]'
     ]
     stubContextualTourTargets(visibleSelectors)
-    store.getState().hydratePersistedUI(makePersistedUI())
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
     store.getState().requestContextualTour('browser', 'browser_visible')
 
     store.getState().advanceContextualTour()

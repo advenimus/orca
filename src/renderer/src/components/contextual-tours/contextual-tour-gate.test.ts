@@ -26,6 +26,7 @@ describe('contextual tour gate', () => {
     const decision = getContextualTourRequestDecision({
       tour: getContextualTour('tasks'),
       persistedUIReady: true,
+      autoEligible: true,
       onboardingVisible: false,
       seenIds: [],
       sessionConsumed: false,
@@ -119,6 +120,7 @@ describe('contextual tour gate', () => {
       getContextualTourRequestDecision({
         tour,
         persistedUIReady: true,
+        autoEligible: true,
         onboardingVisible: false,
         seenIds: [],
         sessionConsumed: false,
@@ -133,6 +135,7 @@ describe('contextual tour gate', () => {
       getContextualTourRequestDecision({
         tour,
         persistedUIReady: false,
+        autoEligible: true,
         onboardingVisible: false,
         seenIds: [],
         sessionConsumed: false,
@@ -147,6 +150,22 @@ describe('contextual tour gate', () => {
       getContextualTourRequestDecision({
         tour,
         persistedUIReady: true,
+        autoEligible: false,
+        onboardingVisible: false,
+        seenIds: [],
+        sessionConsumed: false,
+        activeTourId: null,
+        activeModal: 'none',
+        blockingSurfaceVisible: false,
+        targetExists: hasFirstTarget
+      })
+    ).toEqual({ kind: 'blocked', reason: 'auto-disabled' })
+
+    expect(
+      getContextualTourRequestDecision({
+        tour,
+        persistedUIReady: true,
+        autoEligible: true,
         onboardingVisible: true,
         seenIds: [],
         sessionConsumed: false,
@@ -161,6 +180,7 @@ describe('contextual tour gate', () => {
       getContextualTourRequestDecision({
         tour,
         persistedUIReady: true,
+        autoEligible: true,
         onboardingVisible: false,
         seenIds: ['tasks'],
         sessionConsumed: false,
@@ -175,6 +195,7 @@ describe('contextual tour gate', () => {
       getContextualTourRequestDecision({
         tour,
         persistedUIReady: true,
+        autoEligible: true,
         onboardingVisible: false,
         seenIds: [],
         sessionConsumed: false,

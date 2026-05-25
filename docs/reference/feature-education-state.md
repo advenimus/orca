@@ -14,6 +14,15 @@ Set this when a restart tip is opened, dismissed, or acted on. It prevents the s
 
 Set this after a tour has rendered a measured target, or when the user skips/completes the tour. It prevents the same tour from showing again. It does not mean the user used the feature.
 
+`contextualToursAutoEligible` answers: "May this profile receive automatic contextual tours from this rollout?"
+
+Missing means Orca has not classified the profile yet. On first hydrated launch after this change, the renderer sets it once:
+
+- `true` when first-run onboarding is still open, which covers new users from this rollout forward
+- `false` when onboarding is already closed, which covers existing users
+
+Automatic contextual tours require this flag to be `true`. Existing users still get local feature interaction state recorded when they enter supported surfaces, but they are not auto-toured by this rollout.
+
 `featureInteractions` answers: "Has the user actually interacted with this feature?"
 
 This is the product-state signal for already-discovered features. It lives in `PersistedUIState.featureInteractions`, keyed by `FeatureInteractionId`, and stores the first local interaction timestamp:
@@ -37,6 +46,7 @@ Use this to suppress tips or tours that would teach a feature the user has alrea
 - Do not rename or reuse ids. If semantics change materially, add a new id and leave the old one readable.
 - Unknown or malformed persisted ids are ignored during hydration for forward/backward compatibility.
 - This state is local product state, not telemetry. Analytics should use the bounded feature-education telemetry events (`contextual_tour_shown` and `contextual_tour_outcome`) plus existing downstream action events, rather than reading or uploading the persisted state blob.
+- Automatic contextual tours are new-user-only for this rollout. Do not reset `contextualToursAutoEligible` for existing users unless the product decision changes for a later release.
 
 ## Adding A Tip
 
@@ -60,3 +70,5 @@ For contextual tours in this branch, `useContextualTour(...)` records the matchi
 ## Test Profiles
 
 Completed-onboarding E2E profiles should preseed both education exposure and feature interaction state. That keeps first-run education from covering unrelated UI under test while preserving production behavior for real profiles.
+
+Profiles that model existing users should also set `contextualToursAutoEligible: false`; profiles that explicitly exercise contextual tours can set it to `true`.
