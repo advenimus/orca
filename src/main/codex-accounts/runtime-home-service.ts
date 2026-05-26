@@ -20,6 +20,7 @@ import { writeFileAtomically } from './fs-utils'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath,
+  syncSystemCodexSessionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
@@ -83,6 +84,7 @@ export class CodexRuntimeHomeService {
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
+    syncSystemCodexSessionsIntoManagedHome()
     return this.getRuntimeHomePath()
   }
 
