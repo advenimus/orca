@@ -24,6 +24,7 @@ import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { isClaudeRuntimeHomeEnabled } from '../claude/claude-runtime-home-service'
 import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
 import {
   isClaudeAuthSwitchInProgress,
@@ -254,7 +255,9 @@ export type BuildPtyHostEnvOptions = {
   isPackaged: boolean
   userDataPath: string
   selectedCodexHomePath: string | null
+  selectedClaudeConfigDir?: string | null
   skipCodexHomeEnv?: boolean
+  skipClaudeConfigDirEnv?: boolean
   githubAttributionEnabled: boolean
   agentStatusHooksEnabled: boolean
 }
@@ -276,6 +279,7 @@ function shouldSkipCodexHomeEnvForWindowsShell(
 }
 
 const CODEX_HOME_ENV_KEYS = ['CODEX_HOME', 'ORCA_CODEX_HOME'] as const
+const CLAUDE_CONFIG_DIR_ENV_KEYS = ['CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_CONFIG_DIR'] as const
 
 function mergePtyEnvDeletions(
   existingKeys: string[] | undefined,
@@ -285,6 +289,15 @@ function mergePtyEnvDeletions(
     return undefined
   }
   return Array.from(new Set([...(existingKeys ?? []), ...additionalKeys]))
+}
+
+function shouldPrepareClaudeForHostPty(
+  isClaudeLaunch: boolean,
+  settings: GlobalSettings | undefined
+): boolean {
+  return (
+    isClaudeLaunch || (isAgentStatusHooksEnabled(settings) && isClaudeRuntimeHomeEnabled(settings))
+  )
 }
 
 // Why: when agent status is disabled, a nested Orca terminal can still pass
@@ -307,6 +320,28 @@ function restoreOrStripOverlayEnv(
   }
   delete baseEnv[keys.overlay]
   delete baseEnv[keys.source]
+}
+
+function deleteEnvKeyCaseAware(baseEnv: Record<string, string>, canonicalKey: string): void {
+  if (process.platform !== 'win32') {
+    delete baseEnv[canonicalKey]
+    return
+  }
+  const lowerKey = canonicalKey.toLowerCase()
+  for (const key of Object.keys(baseEnv)) {
+    if (key.toLowerCase() === lowerKey) {
+      delete baseEnv[key]
+    }
+  }
+}
+
+function setEnvKeyCaseAware(
+  baseEnv: Record<string, string>,
+  canonicalKey: string,
+  value: string
+): void {
+  deleteEnvKeyCaseAware(baseEnv, canonicalKey)
+  baseEnv[canonicalKey] = value
 }
 
 /**
@@ -435,6 +470,21 @@ export function buildPtyHostEnv(
     // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers
     // restore this runtime home before Codex can be launched from the prompt.
     baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
+  }
+
+  if (
+    opts.skipClaudeConfigDirEnv ||
+    !opts.agentStatusHooksEnabled ||
+    !opts.selectedClaudeConfigDir
+  ) {
+    for (const key of CLAUDE_CONFIG_DIR_ENV_KEYS) {
+      deleteEnvKeyCaseAware(baseEnv, key)
+    }
+  } else {
+    setEnvKeyCaseAware(baseEnv, 'CLAUDE_CONFIG_DIR', opts.selectedClaudeConfigDir)
+    // Why: user startup files may re-export CLAUDE_CONFIG_DIR; shell-ready
+    // wrappers restore this runtime home before Claude can be launched.
+    setEnvKeyCaseAware(baseEnv, 'ORCA_CLAUDE_CONFIG_DIR', opts.selectedClaudeConfigDir)
   }
 
   // Why: in dev mode the `orca` CLI defaults to the production userData
@@ -664,7 +714,7 @@ export function registerPtyHandlers(
   runtime?: OrcaRuntimeService,
   getSelectedCodexHomePath?: () => string | null,
   getSettings?: () => GlobalSettings,
-  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>,
+  prepareClaudeAuth?: (input?: { cwd?: string }) => Promise<ClaudeRuntimeAuthPreparation>,
   store?: Store
 ): void {
   // Remove any previously registered handlers so we can re-register them
@@ -698,15 +748,22 @@ export function registerPtyHandlers(
           : undefined,
       pwshAvailable: () => isPwshAvailable(),
       buildSpawnEnv: (id, baseEnv, context) => {
+        const settings = getSettings?.()
         const env = buildPtyHostEnv(id, baseEnv, {
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+          selectedClaudeConfigDir: isClaudeRuntimeHomeEnabled(settings)
+            ? (baseEnv.ORCA_CLAUDE_CONFIG_DIR ?? baseEnv.CLAUDE_CONFIG_DIR ?? null)
+            : null,
           // Why: WSL's inner shell cannot use a Windows userData CODEX_HOME.
           // Leave Linux Codex on its native ~/.codex until we own a WSL home.
           skipCodexHomeEnv: context?.isWsl === true,
-          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
-          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
+          // Why: same host-path boundary as CODEX_HOME; WSL Claude needs a
+          // Linux-side runtime home before it can inherit CLAUDE_CONFIG_DIR.
+          skipClaudeConfigDirEnv: context?.isWsl === true,
+          githubAttributionEnabled: settings?.enableGitHubAttribution ?? false,
+          agentStatusHooksEnabled: isAgentStatusHooksEnabled(settings)
         })
         // Why: agents need their own terminal handle at process start so they
         // can self-identify in orchestration messages without an extra RPC.
@@ -990,7 +1047,11 @@ export function registerPtyHandlers(
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
-      const claudeAuth = isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth() : null
+      const settings = getSettings?.()
+      const shouldPrepareClaude =
+        !args.connectionId && shouldPrepareClaudeForHostPty(isClaudeLaunch, settings)
+      const claudeAuth =
+        shouldPrepareClaude && prepareClaudeAuth ? await prepareClaudeAuth({ cwd: args.cwd }) : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -1022,9 +1083,11 @@ export function registerPtyHandlers(
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+          selectedClaudeConfigDir: claudeAuth?.envPatch.CLAUDE_CONFIG_DIR ?? null,
           skipCodexHomeEnv,
+          skipClaudeConfigDirEnv: skipCodexHomeEnv,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
-          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
+          agentStatusHooksEnabled: isAgentStatusHooksEnabled(settings)
         })
       }
 
@@ -1038,10 +1101,10 @@ export function registerPtyHandlers(
         spawnOptions.envToDelete = [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
       }
       if (skipCodexHomeEnv) {
-        spawnOptions.envToDelete = mergePtyEnvDeletions(
-          spawnOptions.envToDelete,
-          CODEX_HOME_ENV_KEYS
-        )
+        spawnOptions.envToDelete = mergePtyEnvDeletions(spawnOptions.envToDelete, [
+          ...CODEX_HOME_ENV_KEYS,
+          ...CLAUDE_CONFIG_DIR_ENV_KEYS
+        ])
       }
       if (args.command !== undefined) {
         spawnOptions.command = args.command
@@ -1257,7 +1320,11 @@ export function registerPtyHandlers(
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
-      const claudeAuth = isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth() : null
+      const settings = getSettings?.()
+      const shouldPrepareClaude =
+        !args.connectionId && shouldPrepareClaudeForHostPty(isClaudeLaunch, settings)
+      const claudeAuth =
+        shouldPrepareClaude && prepareClaudeAuth ? await prepareClaudeAuth({ cwd: args.cwd }) : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -1411,9 +1478,11 @@ export function registerPtyHandlers(
             isPackaged: app.isPackaged,
             userDataPath: app.getPath('userData'),
             selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+            selectedClaudeConfigDir: claudeAuth?.envPatch.CLAUDE_CONFIG_DIR ?? null,
             skipCodexHomeEnv,
+            skipClaudeConfigDirEnv: skipCodexHomeEnv,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
-            agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
+            agentStatusHooksEnabled: isAgentStatusHooksEnabled(settings)
           })
         } catch (err) {
           // Why: buildPtyHostEnv has filesystem side-effects (Pi overlay
@@ -1438,7 +1507,7 @@ export function registerPtyHandlers(
         : undefined
       const combinedEnvToDelete = mergePtyEnvDeletions(
         envToDelete,
-        skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
+        skipCodexHomeEnv ? [...CODEX_HOME_ENV_KEYS, ...CLAUDE_CONFIG_DIR_ENV_KEYS] : []
       )
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
@@ -1997,7 +2066,7 @@ export function registerHeadlessPtyRuntime(
   runtime: OrcaRuntimeService,
   getSelectedCodexHomePath?: () => string | null,
   getSettings?: () => GlobalSettings,
-  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>,
+  prepareClaudeAuth?: (input?: { cwd?: string }) => Promise<ClaudeRuntimeAuthPreparation>,
   store?: Store
 ): void {
   // Why: headless `orca serve` has no renderer window, but the runtime still

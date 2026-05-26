@@ -67,6 +67,7 @@ const RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR = Symbol('runtime-oauth-account-parse-er
 export class ClaudeRuntimeAuthService {
   private readonly pathResolver = new ClaudeRuntimePathResolver()
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private configDirOverride: string | null = null
   private lastSyncedAccountId: string | null = null
   // Why: tracks the credentials Orca last wrote to the shared credentials file.
   // On managed→system-default transition, if the file differs from this value,
@@ -83,14 +84,22 @@ export class ClaudeRuntimeAuthService {
     void this.safeSyncForCurrentSelection()
   }
 
-  async prepareForClaudeLaunch(): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection()
-    return this.getPreparation()
+  async prepareForClaudeLaunch(
+    options: { configDir?: string } = {}
+  ): Promise<ClaudeRuntimeAuthPreparation> {
+    return this.serializeMutation(() =>
+      this.withConfigDirOverride(options.configDir ?? null, async () => {
+        await this.doSyncForCurrentSelection()
+        return this.getPreparation()
+      })
+    )
   }
 
   async prepareForRateLimitFetch(): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection()
-    return this.getPreparation()
+    return this.serializeMutation(async () => {
+      await this.doSyncForCurrentSelection()
+      return this.getPreparation()
+    })
   }
 
   async syncForCurrentSelection(): Promise<void> {
@@ -117,7 +126,24 @@ export class ClaudeRuntimeAuthService {
   }
 
   getRuntimeConfigDir(): string {
-    return this.pathResolver.getRuntimePaths().configDir
+    return this.getRuntimePaths().configDir
+  }
+
+  private async withConfigDirOverride<T>(
+    configDir: string | null,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const previous = this.configDirOverride
+    this.configDirOverride = configDir
+    try {
+      return await fn()
+    } finally {
+      this.configDirOverride = previous
+    }
+  }
+
+  private getRuntimePaths(): ReturnType<ClaudeRuntimePathResolver['getRuntimePaths']> {
+    return this.pathResolver.getRuntimePaths(this.configDirOverride ?? undefined)
   }
 
   private initializeLastSyncedState(): void {
@@ -228,7 +254,7 @@ export class ClaudeRuntimeAuthService {
     }
 
     if (this.lastSyncedAccountId === null) {
-      const paths = this.pathResolver.getRuntimePaths()
+      const paths = this.getRuntimePaths()
       const runtimeCredentialsJson = existsSync(paths.credentialsPath)
         ? readFileSync(paths.credentialsPath, 'utf-8')
         : null
@@ -289,7 +315,7 @@ export class ClaudeRuntimeAuthService {
     if (this.lastSyncedAccountId !== activeAccount.id) {
       this.skipNextReadBackForAccountId = null
     }
-    const paths = this.pathResolver.getRuntimePaths()
+    const paths = this.getRuntimePaths()
     this.writeRuntimeCredentials(credentialsJson)
     if (process.platform === 'darwin') {
       // Why: Claude Code 2.1+ reads the scoped service, while older builds read
@@ -397,7 +423,7 @@ export class ClaudeRuntimeAuthService {
         this.writeRuntimeCredentials(runtimeContents)
         this.lastWrittenCredentialsJson = runtimeContents
         if (process.platform === 'darwin') {
-          const paths = this.pathResolver.getRuntimePaths()
+          const paths = this.getRuntimePaths()
           await writeActiveClaudeKeychainCredentialsForRuntime(runtimeContents, paths.configDir)
         }
       }
@@ -418,7 +444,7 @@ export class ClaudeRuntimeAuthService {
   private async readRuntimeCredentialCandidatesForReadBack(
     baselineCredentialsJson: string
   ): Promise<string[]> {
-    const paths = this.pathResolver.getRuntimePaths()
+    const paths = this.getRuntimePaths()
     const fileCredentials = existsSync(paths.credentialsPath)
       ? readFileSync(paths.credentialsPath, 'utf-8')
       : null
@@ -448,7 +474,7 @@ export class ClaudeRuntimeAuthService {
 
   private getPreparation(): ClaudeRuntimeAuthPreparation {
     const settings = this.store.getSettings()
-    const paths = this.pathResolver.getRuntimePaths()
+    const paths = this.getRuntimePaths()
     const activeAccountId = settings.activeClaudeManagedAccountId
     return {
       configDir: paths.configDir,
@@ -815,7 +841,7 @@ export class ClaudeRuntimeAuthService {
       return
     }
 
-    const paths = this.pathResolver.getRuntimePaths()
+    const paths = this.getRuntimePaths()
     const credentialsJson =
       options.credentialsJsonOverride !== undefined
         ? options.credentialsJsonOverride
@@ -877,7 +903,7 @@ export class ClaudeRuntimeAuthService {
     ownedOauthAccount?: unknown
   ): Promise<void> {
     const snapshotPath = this.getSystemDefaultSnapshotPath()
-    const paths = this.pathResolver.getRuntimePaths()
+    const paths = this.getRuntimePaths()
     const previouslyWrittenCredentialsJson =
       this.lastWrittenCredentialsJson ?? ownedCredentialsJson ?? null
     const snapshot = this.readSystemDefaultSnapshot(snapshotPath)
@@ -971,7 +997,7 @@ export class ClaudeRuntimeAuthService {
     account: ClaudeManagedAccount,
     managedOauthAccount: unknown
   ): Promise<void> {
-    const paths = this.pathResolver.getRuntimePaths()
+    const paths = this.getRuntimePaths()
     const fileCredentialsOwned = this.runtimeCredentialsBelongToAccount(
       this.readRuntimeCredentialsFile(),
       account,
@@ -1022,7 +1048,7 @@ export class ClaudeRuntimeAuthService {
       this.clearLastWrittenRuntimeState()
       return
     }
-    const paths = this.pathResolver.getRuntimePaths()
+    const paths = this.getRuntimePaths()
     const fileCredentialsOwned = this.runtimeCredentialsBelongToAccount(
       this.readRuntimeCredentialsFile(),
       account,
@@ -1072,7 +1098,7 @@ export class ClaudeRuntimeAuthService {
   }
 
   private readRuntimeCredentialsFile(): string | null {
-    const credentialsPath = this.pathResolver.getRuntimePaths().credentialsPath
+    const credentialsPath = this.getRuntimePaths().credentialsPath
     return existsSync(credentialsPath) ? readFileSync(credentialsPath, 'utf-8') : null
   }
 
@@ -1112,7 +1138,7 @@ export class ClaudeRuntimeAuthService {
     if (previouslyWrittenCredentialsJson === null) {
       return false
     }
-    const paths = this.pathResolver.getRuntimePaths()
+    const paths = this.getRuntimePaths()
     const currentCredentialsJson = existsSync(paths.credentialsPath)
       ? readFileSync(paths.credentialsPath, 'utf-8')
       : null
@@ -1120,7 +1146,7 @@ export class ClaudeRuntimeAuthService {
   }
 
   private runtimeCredentialsChangedSinceLastWrite(baselineCredentialsJson: string): boolean {
-    const paths = this.pathResolver.getRuntimePaths()
+    const paths = this.getRuntimePaths()
     try {
       const currentCredentialsJson = existsSync(paths.credentialsPath)
         ? readFileSync(paths.credentialsPath, 'utf-8')
@@ -1135,7 +1161,7 @@ export class ClaudeRuntimeAuthService {
   }
 
   private restoreRuntimeCredentials(credentialsJson: string | null): void {
-    const paths = this.pathResolver.getRuntimePaths()
+    const paths = this.getRuntimePaths()
     if (credentialsJson !== null) {
       this.writeRuntimeCredentials(credentialsJson)
     } else {
@@ -1208,7 +1234,7 @@ export class ClaudeRuntimeAuthService {
   }
 
   private readRuntimeOauthAccount(): unknown {
-    const configPath = this.pathResolver.getRuntimePaths().configPath
+    const configPath = this.getRuntimePaths().configPath
     if (!existsSync(configPath)) {
       return null
     }
@@ -1236,7 +1262,7 @@ export class ClaudeRuntimeAuthService {
   }
 
   private writeRuntimeOauthAccount(oauthAccount: unknown): boolean {
-    const configPath = this.pathResolver.getRuntimePaths().configPath
+    const configPath = this.getRuntimePaths().configPath
     const existing = this.readJsonObject(configPath)
     if (existing === null) {
       return false
@@ -1392,7 +1418,7 @@ export class ClaudeRuntimeAuthService {
   }
 
   private writeRuntimeCredentials(contents: string): void {
-    const credentialsPath = this.pathResolver.getRuntimePaths().credentialsPath
+    const credentialsPath = this.getRuntimePaths().credentialsPath
     mkdirSync(dirname(credentialsPath), { recursive: true })
     // Why: repeated Claude spawns sync auth, but credentials rarely change.
     // Skipping unchanged rewrites avoids Windows EPERM contention in #1507.

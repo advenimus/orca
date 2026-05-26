@@ -150,6 +150,8 @@ __orca_restore_attribution_path
 [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+# Why: Claude must keep using Orca's runtime CLAUDE_CONFIG_DIR after profile scripts.
+[[ -n "\${ORCA_CLAUDE_CONFIG_DIR:-}" ]] && export CLAUDE_CONFIG_DIR="\${ORCA_CLAUDE_CONFIG_DIR}"
 # Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
 # status when the foreground command (e.g. an interrupted Claude/Codex CLI)
 # exits — mirrors the zsh wrapper. Without this, bash users (default on most
@@ -257,6 +259,8 @@ if [[ ! -o login ]]; then
   [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
   # Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
   [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+  # Why: Claude must keep using Orca's runtime CLAUDE_CONFIG_DIR after rc files.
+  [[ -n "\${ORCA_CLAUDE_CONFIG_DIR:-}" ]] && export CLAUDE_CONFIG_DIR="\${ORCA_CLAUDE_CONFIG_DIR}"
 fi
 __orca_osc133_precmd() {
   local exit_code=$?
@@ -350,6 +354,7 @@ __orca_restore_attribution_path
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+[[ -n "\${ORCA_CLAUDE_CONFIG_DIR:-}" ]] && export CLAUDE_CONFIG_DIR="\${ORCA_CLAUDE_CONFIG_DIR}"
 # Why: zsh precmd runs before the prompt is drawn and before zle owns input,
 # which can double-echo startup commands. line-init fires when zle is ready.
 if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then

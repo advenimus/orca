@@ -64,6 +64,7 @@ import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import { codexHookService } from './codex/hook-service'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
+import { ClaudeRuntimeHomeService } from './claude/claude-runtime-home-service'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
@@ -110,6 +111,7 @@ let codexAccounts: CodexAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
 let claudeAccounts: ClaudeAccountService | null = null
 let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
+let claudeRuntimeHome: ClaudeRuntimeHomeService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
@@ -291,6 +293,11 @@ function prepareCodexRuntimeHomeForLaunch(): string {
   return runtimeHomePath
 }
 
+async function prepareClaudeForLaunch(input: { cwd?: string } = {}) {
+  const preparation = await claudeRuntimeHome!.prepareForClaudeLaunch(input)
+  return preparation.auth
+}
+
 function openMainWindow(): BrowserWindow {
   if (!store) {
     throw new Error('Store must be initialized before opening the main window')
@@ -328,6 +335,11 @@ function openMainWindow(): BrowserWindow {
   if (!claudeRuntimeAuth) {
     throw new Error(
       'Claude runtime auth service must be initialized before opening the main window'
+    )
+  }
+  if (!claudeRuntimeHome) {
+    throw new Error(
+      'Claude runtime home service must be initialized before opening the main window'
     )
   }
   if (!keybindings) {
@@ -423,7 +435,7 @@ function openMainWindow(): BrowserWindow {
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-      prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+      prepareForClaudeLaunch: prepareClaudeForLaunch
     },
     agentAwakeService ?? undefined,
     crashReports ?? undefined,
@@ -441,7 +453,7 @@ function openMainWindow(): BrowserWindow {
     store,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
-    () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
+    prepareClaudeForLaunch,
     {
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
         if (window.webContents.id === webContentsId) {
@@ -991,6 +1003,7 @@ app.whenReady().then(async () => {
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
+  claudeRuntimeHome = new ClaudeRuntimeHomeService(store, claudeRuntimeAuth)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   rateLimits.setCodexHomePathResolver(() => codexRuntimeHome!.prepareForRateLimitFetch())
   rateLimits.setClaudeAuthPreparationResolver(() => claudeRuntimeAuth!.prepareForRateLimitFetch())
@@ -1029,7 +1042,7 @@ app.whenReady().then(async () => {
     // even for the system-default path, so every Orca-launched Codex process
     // must resolve CODEX_HOME through the runtime-home service.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-    prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+    prepareForClaudeLaunch: prepareClaudeForLaunch
   })
   starNag = new StarNagService(store, stats)
   starNag.start()
@@ -1197,7 +1210,7 @@ app.whenReady().then(async () => {
       runtime,
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
-      () => claudeRuntimeAuth!.prepareForClaudeLaunch(),
+      prepareClaudeForLaunch,
       store
     )
     // Why: headless servers have no renderer graph publisher. Publish an

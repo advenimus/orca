@@ -499,6 +499,43 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
     })
 
+    it('injects Claude runtime home into ordinary local PTYs when enabled', async () => {
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/orca-claude-home',
+        envPatch: { CLAUDE_CONFIG_DIR: '/tmp/orca-claude-home' },
+        stripAuthEnv: false,
+        provenance: 'system'
+      }))
+      handlers.clear()
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        () =>
+          ({
+            agentStatusHooksEnabled: true,
+            claudeRuntimeHomeEnabled: true
+          }) as never,
+        prepareClaudeAuth
+      )
+
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
+      expect(prepareClaudeAuth).toHaveBeenCalledWith({ cwd: undefined })
+      expect(env.CLAUDE_CONFIG_DIR).toBe('/tmp/orca-claude-home')
+      expect(env.ORCA_CLAUDE_CONFIG_DIR).toBe('/tmp/orca-claude-home')
+    })
+
+    it('strips inherited Claude runtime home when the feature flag is off', async () => {
+      const env = await spawnAndGetEnv({
+        CLAUDE_CONFIG_DIR: '/tmp/parent-orca-claude-home',
+        ORCA_CLAUDE_CONFIG_DIR: '/tmp/parent-orca-claude-home'
+      })
+      expect(env.CLAUDE_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_CLAUDE_CONFIG_DIR).toBeUndefined()
+    })
+
     it('injects the OpenCode hook env into Orca terminal PTYs', async () => {
       // Why: clear any ambient OPENCODE_CONFIG_DIR so the mock's value is used
       const env = await spawnAndGetEnv(undefined, { OPENCODE_CONFIG_DIR: undefined })

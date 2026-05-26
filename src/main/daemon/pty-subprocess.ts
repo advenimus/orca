@@ -19,7 +19,7 @@ import {
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
 import { isPwshAvailable } from '../pwsh'
-import { isHostCodexHomeForWsl } from '../pty/codex-home-wsl-env'
+import { isHostClaudeConfigDirForWsl, isHostCodexHomeForWsl } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { parseWslPath } from '../wsl'
 import { getWslContextFromSessionId } from './wsl-session-context'
@@ -251,11 +251,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     validationCwd = resolved.validationCwd
     if (
       pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe' &&
-      isHostCodexHomeForWsl(env.CODEX_HOME)
+      (isHostCodexHomeForWsl(env.CODEX_HOME) || isHostClaudeConfigDirForWsl(env.CLAUDE_CONFIG_DIR))
     ) {
-      // Why: Orca's selected Codex runtime home is host-local. WSL Codex must
-      // use its Linux-side ~/.codex instead of inheriting a Windows path.
+      // Why: Orca's selected runtime homes are host-local. WSL agents must use
+      // Linux-side homes until Orca provisions WSL-native runtime paths.
       delete env.CODEX_HOME
+      delete env.ORCA_CODEX_HOME
+      delete env.CLAUDE_CONFIG_DIR
+      delete env.ORCA_CLAUDE_CONFIG_DIR
     }
   } else {
     // Why: any Orca-injected overlay env that user rc files can clobber
@@ -265,7 +268,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       : env.ORCA_ATTRIBUTION_SHIM_DIR ||
           env.ORCA_OPENCODE_CONFIG_DIR ||
           env.ORCA_PI_CODING_AGENT_DIR ||
-          env.ORCA_CODEX_HOME
+          env.ORCA_CODEX_HOME ||
+          env.ORCA_CLAUDE_CONFIG_DIR
         ? getAttributionShellLaunchConfig(shellPath)
         : null
     if (shellLaunch) {

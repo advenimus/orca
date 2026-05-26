@@ -13,50 +13,39 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { getOrcaUserDataPath } from '../codex/codex-home-paths'
 
-const CODEX_SYSTEM_RESOURCE_ENTRIES = [
+const CLAUDE_SYSTEM_RESOURCE_ENTRIES = [
+  'agents',
+  'commands',
   'skills',
   'plugins',
-  'plugin-state',
-  'profile-v2',
-  'themes',
-  'prompts'
+  'output-styles'
 ] as const
 
-export function getSystemCodexHomePath(): string {
-  return join(homedir(), '.codex')
+export function getSystemClaudeHomePath(): string {
+  return join(homedir(), '.claude')
 }
 
-export function getOrcaManagedCodexHomePath(): string {
-  const managedHomePath = join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
+export function getOrcaManagedClaudeHomePath(): string {
+  const managedHomePath = join(getOrcaUserDataPath(), 'claude-runtime-home', 'home')
   mkdirSync(managedHomePath, { recursive: true })
   return managedHomePath
 }
 
-export function getOrcaUserDataPath(): string {
-  if (process.env.ORCA_USER_DATA_PATH) {
-    return process.env.ORCA_USER_DATA_PATH
-  }
-  // Why: CLI hook commands import this module outside Electron. Mirror the CLI
-  // runtime metadata path so offline hook status/on/off uses the same userData.
-  if (process.platform === 'darwin') {
-    return join(homedir(), 'Library', 'Application Support', 'orca')
-  }
-  if (process.platform === 'win32') {
-    return join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'orca')
-  }
-  return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
+export function getRemoteOrcaManagedClaudeHomePath(remoteHome: string): string {
+  return `${remoteHome.replace(/\/$/, '')}/.orca/claude-runtime-home/home`
 }
 
-export function syncSystemCodexResourcesIntoManagedHome(): void {
-  const systemHomePath = getSystemCodexHomePath()
-  const managedHomePath = getOrcaManagedCodexHomePath()
-  for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
-    linkSystemCodexResource(systemHomePath, managedHomePath, entryName)
+export function syncSystemClaudeResourcesIntoManagedHome(): void {
+  const systemHomePath = getSystemClaudeHomePath()
+  const managedHomePath = getOrcaManagedClaudeHomePath()
+  for (const entryName of CLAUDE_SYSTEM_RESOURCE_ENTRIES) {
+    linkSystemClaudeResource(systemHomePath, managedHomePath, entryName)
   }
 }
 
-function linkSystemCodexResource(
+function linkSystemClaudeResource(
   systemHomePath: string,
   managedHomePath: string,
   entryName: string
@@ -96,13 +85,12 @@ function linkSystemCodexResource(
   } catch (error) {
     try {
       rmSync(targetPath, { recursive: true, force: true })
-      // Why: Windows can reject file symlinks outside developer mode. Copy is
-      // a fallback for launch-time resources; mark ownership so later syncs can
-      // refresh the copy without touching user-created runtime resources.
+      // Why: Windows may reject symlinks outside developer mode. A marked copy
+      // keeps user resources available without claiming ownership of real home.
       cpSync(sourcePath, targetPath, { recursive: true, force: false, errorOnExist: true })
       markCopiedResource(managedHomePath, entryName, sourcePath)
     } catch {
-      console.warn('[codex-home] Failed to link system Codex resource:', entryName, error)
+      console.warn('[claude-home] Failed to link system Claude resource:', entryName, error)
     }
   }
 }

@@ -7,8 +7,8 @@ export function appendOrcaClaudeAgentStatusSettings(
   command: string,
   shell: ClaudeSettingsShell
 ): string {
-  // Why: Claude's --settings is a per-process overlay. CLAUDE_CONFIG_DIR
-  // would fork auth/session state and normal external Claude launches.
+  // Why: retained as the migration fallback until CLAUDE_CONFIG_DIR runtime
+  // homes are default-on and SSH/WSL parity is proven.
   if (shell === 'powershell') {
     return `${command} --settings $Env:${ORCA_CLAUDE_AGENT_STATUS_SETTINGS_ENV}`
   }

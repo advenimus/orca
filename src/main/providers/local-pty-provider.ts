@@ -31,7 +31,7 @@ import {
   STARTUP_COMMAND_READY_MAX_WAIT_MS
 } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
-import { isHostCodexHomeForWsl } from '../pty/codex-home-wsl-env'
+import { isHostClaudeConfigDirForWsl, isHostCodexHomeForWsl } from '../pty/codex-home-wsl-env'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
@@ -292,11 +292,15 @@ export class LocalPtyProvider implements IPtyProvider {
     if (
       process.platform === 'win32' &&
       pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe' &&
-      isHostCodexHomeForWsl(finalEnv.CODEX_HOME)
+      (isHostCodexHomeForWsl(finalEnv.CODEX_HOME) ||
+        isHostClaudeConfigDirForWsl(finalEnv.CLAUDE_CONFIG_DIR))
     ) {
-      // Why: Orca's selected Codex runtime home is host-local. WSL Codex must
-      // use its Linux-side ~/.codex instead of inheriting a Windows path.
+      // Why: Orca's selected runtime homes are host-local. WSL agents must use
+      // Linux-side homes until Orca provisions WSL-native runtime paths.
       delete finalEnv.CODEX_HOME
+      delete finalEnv.ORCA_CODEX_HOME
+      delete finalEnv.CLAUDE_CONFIG_DIR
+      delete finalEnv.ORCA_CLAUDE_CONFIG_DIR
     }
     if (!wslInfo && process.platform !== 'win32') {
       // Why: any Orca-injected overlay env that user rc files can clobber
@@ -305,7 +309,8 @@ export class LocalPtyProvider implements IPtyProvider {
         finalEnv.ORCA_ATTRIBUTION_SHIM_DIR ||
         finalEnv.ORCA_OPENCODE_CONFIG_DIR ||
         finalEnv.ORCA_PI_CODING_AGENT_DIR ||
-        finalEnv.ORCA_CODEX_HOME
+        finalEnv.ORCA_CODEX_HOME ||
+        finalEnv.ORCA_CLAUDE_CONFIG_DIR
       getFallbackShellReadyConfig = args.command
         ? (shell) => getShellReadyLaunchConfig(shell)
         : needsNoMarkerWrapper

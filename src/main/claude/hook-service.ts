@@ -26,7 +26,7 @@ import {
   removeManagedHooks
 } from './hook-settings'
 
-function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+export function getClaudeManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
@@ -180,7 +180,7 @@ export class ClaudeHookService {
 
     const command = getManagedCommand(scriptPath)
     const nextConfig = applyManagedHooks(config, command)
-    writeManagedScript(scriptPath, getManagedScript())
+    writeManagedScript(scriptPath, getClaudeManagedScript())
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
   }
@@ -240,7 +240,7 @@ export class ClaudeHookService {
       // of broken settings.json.
       // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
       // running on Windows; never derive remote script syntax from local OS.
-      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getClaudeManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       const legacyConfig = await readHooksJsonRemote(sftp, remoteLegacyConfigPath)

@@ -11,16 +11,17 @@ export type ClaudeRuntimePaths = {
 }
 
 export class ClaudeRuntimePathResolver {
-  getRuntimePaths(): ClaudeRuntimePaths {
+  getRuntimePaths(configDirOverride?: string): ClaudeRuntimePaths {
     const inheritedConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || null
-    const configDir = inheritedConfigDir || join(homedir(), '.claude')
+    const explicitConfigDir = configDirOverride?.trim() || inheritedConfigDir
+    const configDir = explicitConfigDir || join(homedir(), '.claude')
     mkdirSync(configDir, { recursive: true })
 
     return {
       configDir,
       credentialsPath: join(configDir, '.credentials.json'),
-      configPath: this.resolveConfigPath(configDir, inheritedConfigDir),
-      envPatch: inheritedConfigDir ? { CLAUDE_CONFIG_DIR: configDir } : {}
+      configPath: this.resolveConfigPath(configDir, explicitConfigDir),
+      envPatch: explicitConfigDir ? { CLAUDE_CONFIG_DIR: configDir } : {}
     }
   }
 

@@ -40,7 +40,7 @@ export function attachMainWindowServices(
   store: Store,
   runtime: OrcaRuntimeService,
   getSelectedCodexHomePath?: () => string | null,
-  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>,
+  prepareClaudeAuth?: (input?: { cwd?: string }) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
   }
