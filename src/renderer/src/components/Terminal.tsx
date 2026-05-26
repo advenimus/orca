@@ -1198,6 +1198,9 @@ function Terminal(): React.JSX.Element | null {
         if (state.activeTabType === 'terminal' && context === 'terminal') {
           return
         }
+        if (isFloatingWorkspacePanelFocused()) {
+          return
+        }
         e.preventDefault()
         notifyTerminalCapture('tab.close')
         if (state.activeTabType === 'editor' && state.activeFileId) {
