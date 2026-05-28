@@ -111,8 +111,8 @@ export const CONTEXTUAL_TOURS = [
     allowedActiveModals: ['new-workspace-composer', 'add-repo'],
     steps: [
       {
-        title: 'Confirm the project source',
-        body: 'Choose or confirm the folder, clone, remote project, or existing project before creating work.',
+        title: 'Add the code Orca should work on',
+        body: 'Pick a local folder, clone a repo URL, or connect to a remote machine. Orca needs a project before it can create workspaces.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-source"]',
         requiredForStart: true
       },
