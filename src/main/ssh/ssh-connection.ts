@@ -70,6 +70,10 @@ export class SshConnection {
     return { ...this.target }
   }
 
+  setCallbacks(callbacks: SshConnectionCallbacks): void {
+    this.callbacks = callbacks
+  }
+
   // Why: exposes whether a passphrase/password is already cached in-memory for
   // this connection. Used by ssh:needsPassphrasePrompt so callers can decide
   // whether a manual-reconnect will prompt or go through silently. Without this,
