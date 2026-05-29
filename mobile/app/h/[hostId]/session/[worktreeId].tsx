@@ -1099,6 +1099,14 @@ export default function SessionScreen() {
     activeSessionTab?.type !== 'browser'
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
+  // Why: terminal gesture/input callbacks are intentionally stable and
+  // imperative; keep their refs current before commit instead of one effect later.
+  clientRef.current = client
+  connStateRef.current = connState
+  activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
+  sessionTabsRef.current = sessionTabs
+  activeSessionTabIdRef.current = activeSessionTabId
+  markdownDocsRef.current = markdownDocs
   const reconciledCreateWarningState = reconcileMobileSessionCreateWarningState(
     createWarningState,
     initialCreateWarning
@@ -1188,22 +1196,6 @@ export default function SessionScreen() {
       showToast(err.message)
     }
   })
-
-  useEffect(() => {
-    activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
-  }, [activeSessionTab])
-
-  useEffect(() => {
-    sessionTabsRef.current = sessionTabs
-  }, [sessionTabs])
-
-  useEffect(() => {
-    activeSessionTabIdRef.current = activeSessionTabId
-  }, [activeSessionTabId])
-
-  useEffect(() => {
-    markdownDocsRef.current = markdownDocs
-  }, [markdownDocs])
 
   useEffect(() => {
     diffCommentsRef.current = diffComments
@@ -2133,15 +2125,7 @@ export default function SessionScreen() {
     }
   }, [applySessionTabs, client, worktreeId])
 
-  // Why: keep clientRef in sync with the shared client from
-  // useHostClient() so the existing imperative call sites
-  // (clientRef.current.sendRequest...) keep working without churn.
   useEffect(() => {
-    clientRef.current = client
-  }, [client])
-
-  useEffect(() => {
-    connStateRef.current = connState
     if (connState === 'connected') return
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) clearTimeout(queued.timer)
