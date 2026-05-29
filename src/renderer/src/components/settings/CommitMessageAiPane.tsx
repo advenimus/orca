@@ -60,6 +60,76 @@ type ModelDiscoveryState = {
   error?: string
 }
 
+type CommitMessageInstructionOperation = Extract<
+  SourceControlAiOperation,
+  'commitMessage' | 'pullRequest'
+>
+
+type CommitMessageInstructionDraftValues = Record<CommitMessageInstructionOperation, string>
+
+type CommitMessageInstructionDraftState = {
+  source: CommitMessageInstructionDraftValues
+  draft: CommitMessageInstructionDraftValues
+  discardSignal: number | undefined
+}
+
+const COMMIT_MESSAGE_INSTRUCTION_OPERATIONS: readonly CommitMessageInstructionOperation[] = [
+  'commitMessage',
+  'pullRequest'
+]
+
+function cloneInstructionDraftValues(
+  values: CommitMessageInstructionDraftValues
+): CommitMessageInstructionDraftValues {
+  return {
+    commitMessage: values.commitMessage,
+    pullRequest: values.pullRequest
+  }
+}
+
+export function createCommitMessageInstructionDraftState(
+  source: CommitMessageInstructionDraftValues,
+  discardSignal: number | undefined
+): CommitMessageInstructionDraftState {
+  return {
+    source: cloneInstructionDraftValues(source),
+    draft: cloneInstructionDraftValues(source),
+    discardSignal
+  }
+}
+
+export function resolveCommitMessageInstructionDraftState(
+  state: CommitMessageInstructionDraftState,
+  source: CommitMessageInstructionDraftValues,
+  discardSignal: number | undefined
+): CommitMessageInstructionDraftState {
+  if (state.discardSignal !== discardSignal) {
+    return createCommitMessageInstructionDraftState(source, discardSignal)
+  }
+
+  let changed = false
+  const nextSource = cloneInstructionDraftValues(state.source)
+  const nextDraft = cloneInstructionDraftValues(state.draft)
+  for (const operation of COMMIT_MESSAGE_INSTRUCTION_OPERATIONS) {
+    if (state.source[operation] === source[operation]) {
+      continue
+    }
+    if (state.draft[operation] === state.source[operation]) {
+      nextDraft[operation] = source[operation]
+    }
+    nextSource[operation] = source[operation]
+    changed = true
+  }
+
+  return changed
+    ? {
+        source: nextSource,
+        draft: nextDraft,
+        discardSignal
+      }
+    : state
+}
+
 const UNCONFIGURED_AGENT_SELECT_VALUE = ''
 const INHERIT_MODEL_SELECT_VALUE = '__inherit__'
 const COMING_SOON_COMMIT_MESSAGE_AGENTS: readonly { id: TuiAgent; label: string }[] = [
@@ -221,44 +291,59 @@ export function CommitMessageAiPane({
   const [modelDiscoveryByAgent, setModelDiscoveryByAgent] = useState<
     Partial<Record<TuiAgent, ModelDiscoveryState>>
   >({})
-  const persistedCommitPrompt = config.instructionsByOperation.commitMessage ?? ''
-  const persistedPullRequestPrompt = config.instructionsByOperation.pullRequest ?? ''
-  const [commitPromptDraft, setCommitPromptDraft] = useState(persistedCommitPrompt)
-  const [pullRequestPromptDraft, setPullRequestPromptDraft] = useState(persistedPullRequestPrompt)
-  const [isSavingPrompt, setIsSavingPrompt] = useState(false)
-  const persistedPromptsRef = useRef({
-    commitMessage: persistedCommitPrompt,
-    pullRequest: persistedPullRequestPrompt
-  })
-  const isCommitPromptDirty = commitPromptDraft !== persistedCommitPrompt
-  const isPullRequestPromptDirty = pullRequestPromptDraft !== persistedPullRequestPrompt
-  const isCustomPromptDirty = isCommitPromptDirty || isPullRequestPromptDirty
-
-  useEffect(() => {
-    persistedPromptsRef.current = {
-      commitMessage: persistedCommitPrompt,
-      pullRequest: persistedPullRequestPrompt
-    }
-  }, [persistedCommitPrompt, persistedPullRequestPrompt])
-
-  useEffect(() => {
-    if (!isCommitPromptDirty) {
-      setCommitPromptDraft(persistedCommitPrompt)
-    }
-  }, [isCommitPromptDirty, persistedCommitPrompt])
-
-  useEffect(() => {
-    if (!isPullRequestPromptDirty) {
-      setPullRequestPromptDraft(persistedPullRequestPrompt)
-    }
-  }, [isPullRequestPromptDirty, persistedPullRequestPrompt])
-
-  useEffect(() => {
-    setCommitPromptDraft(persistedPromptsRef.current.commitMessage)
-    setPullRequestPromptDraft(persistedPromptsRef.current.pullRequest)
-    // Why: parent navigation guards use this signal after the user confirms
-    // they want to leave without saving the prompt draft.
-  }, [customPromptDiscardSignal])
+  const persistedCommitInstructions = config.instructionsByOperation.commitMessage ?? ''
+  const persistedPullRequestInstructions = config.instructionsByOperation.pullRequest ?? ''
+  const persistedInstructionDraftValues: CommitMessageInstructionDraftValues = {
+    commitMessage: persistedCommitInstructions,
+    pullRequest: persistedPullRequestInstructions
+  }
+  const [instructionDraftState, setInstructionDraftState] = useState(() =>
+    createCommitMessageInstructionDraftState(
+      persistedInstructionDraftValues,
+      customPromptDiscardSignal
+    )
+  )
+  const [isSavingInstructions, setIsSavingInstructions] = useState(false)
+  const resolvedInstructionDraftState = resolveCommitMessageInstructionDraftState(
+    instructionDraftState,
+    persistedInstructionDraftValues,
+    customPromptDiscardSignal
+  )
+  if (resolvedInstructionDraftState !== instructionDraftState) {
+    // Why: prompt drafts should follow persisted settings only while clean,
+    // and the parent discard signal must reset all unsaved instruction edits.
+    setInstructionDraftState(resolvedInstructionDraftState)
+  }
+  const commitInstructionsDraft = resolvedInstructionDraftState.draft.commitMessage
+  const pullRequestInstructionsDraft = resolvedInstructionDraftState.draft.pullRequest
+  const updateInstructionDraft = (
+    operation: CommitMessageInstructionOperation,
+    value: string
+  ): void => {
+    setInstructionDraftState((current) => {
+      const resolved = resolveCommitMessageInstructionDraftState(
+        current,
+        persistedInstructionDraftValues,
+        customPromptDiscardSignal
+      )
+      return {
+        ...resolved,
+        draft: {
+          ...resolved.draft,
+          [operation]: value
+        }
+      }
+    })
+  }
+  const isCommitInstructionsDirty = commitInstructionsDraft !== persistedCommitInstructions
+  const isPullRequestInstructionsDirty =
+    pullRequestInstructionsDraft !== persistedPullRequestInstructions
+  const isCustomPromptDirty = isCommitInstructionsDirty || isPullRequestInstructionsDirty
+  const commitPromptDraft = commitInstructionsDraft
+  const pullRequestPromptDraft = pullRequestInstructionsDraft
+  const isCommitPromptDirty = isCommitInstructionsDirty
+  const isPullRequestPromptDirty = isPullRequestInstructionsDirty
+  const isSavingPrompt = isSavingInstructions
 
   useEffect(() => {
     onCustomPromptDirtyChange?.(isCustomPromptDirty)
@@ -689,13 +774,14 @@ export function CommitMessageAiPane({
     }))
   }
 
-  const onSavePrompt = async (operation: SourceControlAiOperation): Promise<void> => {
-    const draft = operation === 'commitMessage' ? commitPromptDraft : pullRequestPromptDraft
-    const dirty = operation === 'commitMessage' ? isCommitPromptDirty : isPullRequestPromptDirty
-    if (!dirty || isSavingPrompt) {
+  const onSavePrompt = async (operation: CommitMessageInstructionOperation): Promise<void> => {
+    const draft = resolvedInstructionDraftState.draft[operation]
+    const dirty =
+      operation === 'commitMessage' ? isCommitInstructionsDirty : isPullRequestInstructionsDirty
+    if (!dirty || isSavingInstructions) {
       return
     }
-    setIsSavingPrompt(true)
+    setIsSavingInstructions(true)
     try {
       await writeConfig((current) => ({
         instructionsByOperation: {
@@ -704,16 +790,25 @@ export function CommitMessageAiPane({
         }
       }))
     } finally {
-      setIsSavingPrompt(false)
+      setIsSavingInstructions(false)
     }
   }
 
-  const onDiscardPrompt = (operation: SourceControlAiOperation): void => {
-    if (operation === 'commitMessage') {
-      setCommitPromptDraft(persistedCommitPrompt)
-      return
-    }
-    setPullRequestPromptDraft(persistedPullRequestPrompt)
+  const onDiscardPrompt = (operation: CommitMessageInstructionOperation): void => {
+    setInstructionDraftState((current) => {
+      const resolved = resolveCommitMessageInstructionDraftState(
+        current,
+        persistedInstructionDraftValues,
+        customPromptDiscardSignal
+      )
+      return {
+        ...resolved,
+        draft: {
+          ...resolved.draft,
+          [operation]: resolved.source[operation]
+        }
+      }
+    })
   }
 
   const onPrDefaultChange = (
@@ -1144,7 +1239,7 @@ export function CommitMessageAiPane({
           id="source-control-ai-commit-prompt"
           rows={4}
           value={commitPromptDraft}
-          onChange={(e) => setCommitPromptDraft(e.target.value)}
+          onChange={(e) => updateInstructionDraft('commitMessage', e.target.value)}
           placeholder="Use Conventional Commits format (feat:, fix:, ...). Reference the ticket key when present."
           className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
         />
@@ -1208,7 +1303,7 @@ export function CommitMessageAiPane({
           id="source-control-ai-pr-prompt"
           rows={4}
           value={pullRequestPromptDraft}
-          onChange={(e) => setPullRequestPromptDraft(e.target.value)}
+          onChange={(e) => updateInstructionDraft('pullRequest', e.target.value)}
           placeholder="Summarize user-visible changes first, then list reviewer notes and testing evidence."
           className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
         />
