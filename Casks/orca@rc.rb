@@ -1,28 +1,36 @@
-cask "orca" do
+cask "orca@rc" do
   arch arm: "arm64", intel: "x64"
 
-  version "1.3.24"
-  sha256 arm:   "fc707f290ff3b631b7b7947bf339885b61a43d2e89475997c125b61268ed4966",
-         intel: "5f677c13a08f7a5740442e29d388285a86488c8c1f7aa5f10a8721a2c6ede8e4"
+  version "1.4.36-rc.3"
+  sha256 arm:   "563b6b14323fc9d5489299c82442d514bc12cabffc9d06d3964ed572af4b3955",
+         intel: "457088c7021f07de1a419197f7b2bd00092741ad4727d4fef3d86af38a6831e7"
 
   url "https://github.com/stablyai/orca/releases/download/v#{version}/orca-macos-#{arch}.dmg",
       verified: "github.com/stablyai/orca/"
-  name "Orca"
+  name "Orca RC"
   desc "IDE for orchestrating AI coding agents across terminals and worktrees"
   homepage "https://onorca.dev/"
 
   livecheck do
-    url :url
-    strategy :github_latest
+    url "https://github.com/stablyai/orca"
+    regex(/^v?(\d+(?:\.\d+)+-rc\.\d+)$/i)
+    strategy :github_releases do |json, regex|
+      json.map do |release|
+        next if release["draft"]
+        next unless release["prerelease"]
+
+        match = release["tag_name"]&.match(regex)
+        next if match.blank?
+
+        match[1]
+      end
+    end
   end
 
-  # Why: electron-updater (src/main/updater.ts) handles in-place updates by
-  # writing a new Orca.app into /Applications. Marking the cask auto_updates
-  # tells Homebrew not to compete with the in-app updater — `brew upgrade`
-  # becomes a no-op unless the user passes --greedy, and brew's version
-  # metadata stays aligned with whatever the app has swapped itself to.
+  # Why: RC installs should follow Orca's prerelease-aware updater instead of
+  # waiting for Homebrew metadata churn between frequent release candidates.
   auto_updates true
-  conflicts_with cask: "orca@rc"
+  conflicts_with cask: "orca"
   depends_on macos: :big_sur
 
   app "Orca.app"
