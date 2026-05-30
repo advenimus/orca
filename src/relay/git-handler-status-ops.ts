@@ -99,7 +99,9 @@ export async function getStatusOp(
       disableOptionalLocks: true
     })
     const parsed = parseStatusOutput(stdout)
-    entries.push(...parsed.entries)
+    for (const entry of parsed.entries) {
+      entries.push(entry)
+    }
     head = parsed.head
     branch = parsed.branch
     upstreamStatus = parsed.upstreamStatus
