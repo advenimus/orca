@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/types'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 
 const WorktreeTabSelector = z.object({
@@ -21,8 +22,9 @@ const CreateTerminalTab = WorktreeTabSelector.extend({
   targetGroupId: z.string().optional(),
   command: z.string().optional(),
   agent: z
-    .unknown()
-    .transform((value) => (isTuiAgent(value) ? value : undefined))
+    .custom<TuiAgent>(isTuiAgent, {
+      message: 'Unknown agent preset'
+    })
     .optional(),
   activate: z.boolean().optional()
 })

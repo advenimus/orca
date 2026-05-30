@@ -9291,7 +9291,6 @@ export class OrcaRuntimeService {
     this.assertGraphReady()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const worktreeId = worktree.id
-    const command = await this.resolveMobileSessionTerminalCommand(worktree, opts)
     let afterDesktopTabId: string | undefined
     if (opts.afterTabId) {
       const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
@@ -9301,6 +9300,7 @@ export class OrcaRuntimeService {
       }
       afterDesktopTabId = anchor.type === 'terminal' ? anchor.parentTabId : anchor.id
     }
+    const command = await this.resolveMobileSessionTerminalCommand(worktree, opts)
 
     const win = this.getAvailableAuthoritativeWindow()
     if (!win) {

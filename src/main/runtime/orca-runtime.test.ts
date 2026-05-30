@@ -5432,6 +5432,33 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).not.toHaveBeenCalled()
   })
 
+  it('validates mobile terminal insertion anchors before resolving agent launch commands', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: ['codex'],
+        agentCmdOverrides: {}
+      })
+    } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await expect(
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        afterTabId: 'stale-tab',
+        agent: 'codex'
+      })
+    ).rejects.toThrow('after_tab_not_found')
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
   it('forwards inactive mobile terminal creation to the renderer without focusing it', async () => {
     const focusTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(store)

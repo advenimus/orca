@@ -42,6 +42,7 @@ import {
   X
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
+import { getRepoIdFromWorktreeId } from '../../../../src/shared/worktree-id'
 import { loadHosts } from '../../../../src/transport/host-store'
 import { useHostClient } from '../../../../src/transport/client-context'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
@@ -301,12 +302,6 @@ type TerminalCreateResult = {
 }
 
 type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
-
-type RuntimeWorktreeResult = {
-  worktree?: {
-    repoId?: string
-  }
-}
 
 type RuntimeRepoSummary = {
   id: string
@@ -2649,31 +2644,24 @@ export default function SessionScreen() {
     setCreateTabAgentOptions([])
 
     void (async () => {
-      const [settingsResponse, worktreeResponse] = await Promise.all([
+      const [settingsResponse, repoResponse] = await Promise.all([
         client.sendRequest('settings.get'),
-        client.sendRequest('worktree.show', { worktree: `id:${worktreeId}` })
+        client.sendRequest('repo.list')
       ])
       if (!settingsResponse.ok) {
         throw new Error(settingsResponse.error.message)
       }
-      if (!worktreeResponse.ok) {
-        throw new Error(worktreeResponse.error.message)
-      }
-
       const settings = (
         (settingsResponse as RpcSuccess).result as {
           settings?: MobileNewTabAgentSettings
         }
       ).settings
-      const worktree = ((worktreeResponse as RpcSuccess).result as RuntimeWorktreeResult).worktree
-      const repoId = worktree?.repoId
-      if (!repoId) {
-        throw new Error('worktree_repo_missing')
-      }
-
-      const repoResponse = await client.sendRequest('repo.list')
       if (!repoResponse.ok) {
         throw new Error(repoResponse.error.message)
+      }
+      const repoId = getRepoIdFromWorktreeId(worktreeId)
+      if (!repoId) {
+        throw new Error('worktree_repo_missing')
       }
       const repos =
         ((repoResponse as RpcSuccess).result as { repos?: RuntimeRepoSummary[] }).repos ?? []
@@ -3072,7 +3060,7 @@ export default function SessionScreen() {
         : createTabAgentLoadState === 'loaded'
           ? [
               {
-                label: 'No Agents Detected',
+                label: 'No Enabled Agents',
                 icon: Bot,
                 disabled: true,
                 onPress: () => {}

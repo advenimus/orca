@@ -161,6 +161,27 @@ describe('session tab RPC methods', () => {
     })
   })
 
+  it('rejects unknown agent presets without creating a terminal', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.createTerminal', {
+        worktree: 'id:wt-1',
+        agent: 'not-real'
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(response).toMatchObject({
+      error: { code: 'invalid_argument', message: 'Unknown agent preset' }
+    })
+    expect(runtime.createMobileSessionTerminal).not.toHaveBeenCalled()
+  })
+
   it('streams all known session tab snapshots and later updates', async () => {
     const unsubscribe = vi.fn()
     const listeners: ((snapshot: unknown) => void)[] = []
