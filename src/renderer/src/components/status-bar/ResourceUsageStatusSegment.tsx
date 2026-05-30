@@ -28,6 +28,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
@@ -695,7 +696,7 @@ export function ResourceUsageStatusSegment({
   // somewhere stable for keyboard users.
   const popoverBodyRef = useRef<HTMLDivElement | null>(null)
   const popoverBodyFocusFrameRef = useRef<number | null>(null)
-  const mountedRef = useRef(true)
+  const mountedRef = useMountedRef()
 
   const cancelPopoverBodyFocusFrame = useCallback((): void => {
     if (popoverBodyFocusFrameRef.current === null) {
@@ -706,13 +707,6 @@ export function ResourceUsageStatusSegment({
   }, [])
 
   useEffect(() => cancelPopoverBodyFocusFrame, [cancelPopoverBodyFocusFrame])
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
 
   const setPopoverBodyNode = useCallback(
     (node: HTMLDivElement | null): void => {
@@ -745,7 +739,7 @@ export function ResourceUsageStatusSegment({
         setSessionsError(true)
       }
     }
-  }, [runtimeEnvironmentActive])
+  }, [mountedRef, runtimeEnvironmentActive])
 
   const daemonActions = useDaemonActions({
     onRestartSettled: () => {
@@ -1096,7 +1090,7 @@ export function ResourceUsageStatusSegment({
         void refreshSessions()
       }
     }
-  }, [cancelPopoverBodyFocusFrame, killConfirm, refreshSessions])
+  }, [cancelPopoverBodyFocusFrame, killConfirm, mountedRef, refreshSessions])
 
   const openSpaceResults = useCallback((): void => {
     setOpen(false)
