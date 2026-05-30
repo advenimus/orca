@@ -173,6 +173,7 @@ import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
+import type { ClaudeWorkflowRecoveryActionResult } from '../shared/claude-workflow-actions'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type {
   RuntimeBrowserDriverState,
@@ -2149,6 +2150,9 @@ export type PreloadApi = {
     /** Return the current main-process hook cache after renderer hydration. */
     getSnapshot: () => Promise<AgentStatusIpcPayload[]>
     inferInterrupt: (request: AgentInterruptInferenceRequest) => Promise<boolean>
+    copyWorkflowResumeCommand: (workflowId: string) => Promise<ClaudeWorkflowRecoveryActionResult>
+    revealWorkflowScript: (workflowId: string) => Promise<ClaudeWorkflowRecoveryActionResult>
+    revealWorkflowTranscripts: (workflowId: string) => Promise<ClaudeWorkflowRecoveryActionResult>
     /** Listen for PTYs that still use a legacy numeric pane key but have
      *  registry-backed UUID pane proof. */
     onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void

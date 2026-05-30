@@ -8,6 +8,7 @@ import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { ClaudeWorkflowRecoveryMetadata } from '../../../../shared/claude-workflow-actions'
 import { dismissStaleAgentRowByKey } from '../terminal-pane/stale-agent-row'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 
@@ -184,6 +185,30 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     [worktreeId]
   )
 
+  const handleOpenWorkflowParent = useCallback(
+    (workflow: ClaudeWorkflowRecoveryMetadata): boolean => {
+      if (workflow.worktreeId && workflow.worktreeId !== worktreeId) {
+        return false
+      }
+      const parsed = parsePaneKey(workflow.parentPaneKey)
+      if (!parsed) {
+        return false
+      }
+      const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
+      if (!tabs.some((tab) => tab.id === parsed.tabId)) {
+        return false
+      }
+      activateAndRevealWorktree(worktreeId)
+      activateTabAndFocusPane(parsed.tabId, parsed.leafId, {
+        ackPaneKeyOnSuccess: workflow.parentPaneKey,
+        flashFocusedPane: true,
+        scrollToBottomIfOutputSinceLastView: true
+      })
+      return true
+    },
+    [worktreeId]
+  )
+
   // Why: own one 30s tick per non-empty inline list. Cards with zero agents
   // never mount this component (see WorktreeCardAgents), so idle worktrees
   // don't pay any timer cost.
@@ -241,6 +266,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           agent={agent}
           onDismiss={handleDismissAgent}
           onActivate={handleActivateAgentTab}
+          onOpenWorkflowParent={handleOpenWorkflowParent}
           now={now}
           // Why: bold an agent row until the user has visited its tab.
           // useAutoAckViewedAgent acks automatically when the user

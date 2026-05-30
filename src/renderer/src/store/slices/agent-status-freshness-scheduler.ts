@@ -46,7 +46,11 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     // future timer: the setAgentStatus write already bumped the epoch, so
     // freshness-aware selectors can decay them immediately on that render.
     for (const entry of entries) {
-      const expiryAt = entry.updatedAt + AGENT_STATUS_STALE_AFTER_MS
+      const workflowExpiryAt =
+        entry.workflowRecovery?.hasActiveChildWork === true
+          ? entry.workflowRecovery.updatedAt + AGENT_STATUS_STALE_AFTER_MS
+          : Number.POSITIVE_INFINITY
+      const expiryAt = Math.min(entry.updatedAt + AGENT_STATUS_STALE_AFTER_MS, workflowExpiryAt)
       if (expiryAt > now) {
         nextExpiryAt = Math.min(nextExpiryAt, expiryAt)
       }

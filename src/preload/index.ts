@@ -109,6 +109,7 @@ import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
+import type { ClaudeWorkflowRecoveryActionResult } from '../shared/claude-workflow-actions'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type {
   SpeechErrorEvent,
@@ -3341,6 +3342,12 @@ const api = {
       ipcRenderer.invoke('agentStatus:getSnapshot'),
     inferInterrupt: (request: AgentInterruptInferenceRequest): Promise<boolean> =>
       ipcRenderer.invoke('agentStatus:inferInterrupt', request),
+    copyWorkflowResumeCommand: (workflowId: string): Promise<ClaudeWorkflowRecoveryActionResult> =>
+      ipcRenderer.invoke('agentStatus:copyWorkflowResumeCommand', workflowId),
+    revealWorkflowScript: (workflowId: string): Promise<ClaudeWorkflowRecoveryActionResult> =>
+      ipcRenderer.invoke('agentStatus:revealWorkflowScript', workflowId),
+    revealWorkflowTranscripts: (workflowId: string): Promise<ClaudeWorkflowRecoveryActionResult> =>
+      ipcRenderer.invoke('agentStatus:revealWorkflowTranscripts', workflowId),
     onMigrationUnsupported: (
       callback: (entry: MigrationUnsupportedPtyEntry) => void
     ): (() => void) => {

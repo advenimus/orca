@@ -2121,9 +2121,14 @@ export function useIpcEvents(): void {
       ) {
         return 'dropped'
       }
-      const statusPayload = data.orchestration
-        ? { ...payload, orchestration: data.orchestration }
-        : payload
+      const statusPayload =
+        data.orchestration || data.workflowRecovery
+          ? {
+              ...payload,
+              ...(data.orchestration ? { orchestration: data.orchestration } : {}),
+              ...(data.workflowRecovery ? { workflowRecovery: data.workflowRecovery } : {})
+            }
+          : payload
       store.setAgentStatus(data.paneKey, statusPayload, title, {
         updatedAt: data.receivedAt,
         stateStartedAt: data.stateStartedAt

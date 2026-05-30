@@ -60,6 +60,42 @@ describe('agent status freshness expiry', () => {
     // No additional bump since the entry was removed before the timer fires
     expect(store.getState().agentStatusEpoch).toBe(2)
   })
+
+  it('advances agentStatusEpoch when workflow recovery metadata crosses stale threshold', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+
+    const store = createTestStore()
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'done',
+        prompt: 'p',
+        agentType: 'claude',
+        workflowRecovery: {
+          workflowId: 'wf-1',
+          parentPaneKey: 'tab-1:1',
+          updatedAt: 10_000,
+          hasActiveChildWork: true,
+          isStale: false,
+          isResumable: true,
+          actions: {
+            copyResumeCommand: { available: true },
+            revealScript: { available: true },
+            revealTranscripts: { available: true },
+            openParentPane: { available: true }
+          }
+        }
+      },
+      'claude',
+      { updatedAt: 1_000, stateStartedAt: 1_000 }
+    )
+
+    await flushMicrotasks()
+    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
+
+    expect(store.getState().agentStatusEpoch).toBe(2)
+  })
 })
 
 describe('agent status tool + assistant fields', () => {

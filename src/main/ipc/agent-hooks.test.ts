@@ -14,9 +14,14 @@ const onHandlers = new Map<string, (event: unknown, ...args: unknown[]) => void>
 const handleHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
 const removeHandler = vi.fn()
 const removeAllListeners = vi.fn()
+const clipboardWriteText = vi.fn()
+const showItemInFolder = vi.fn()
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 
 vi.mock('electron', () => ({
+  clipboard: {
+    writeText: clipboardWriteText
+  },
   ipcMain: {
     handle: (channel: string, handler: (event: unknown, ...args: unknown[]) => unknown) => {
       handleHandlers.set(channel, handler)
@@ -26,6 +31,9 @@ vi.mock('electron', () => ({
     },
     removeHandler,
     removeAllListeners
+  },
+  shell: {
+    showItemInFolder
   }
 }))
 

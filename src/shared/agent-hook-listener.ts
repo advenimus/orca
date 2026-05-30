@@ -28,6 +28,10 @@ import {
 import { join } from 'path'
 
 import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
+import {
+  buildClaudeWorkflowId,
+  type ClaudeWorkflowRecoveryHookMetadata
+} from './claude-workflow-actions'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import { parsePaneKey } from './stable-pane-id'
@@ -177,6 +181,9 @@ export type AgentHookEventPayload = {
   toolAgentId?: string
   /** Agent/subagent type from the source hook payload, when present. */
   toolAgentType?: string
+  /** Raw Claude workflow recovery fields. Main converts this into renderer-safe
+   *  action metadata and keeps the paths in its action lookup. */
+  workflowRecoveryLookup?: ClaudeWorkflowRecoveryHookMetadata
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
   payload: ParsedAgentStatusPayload
@@ -550,6 +557,42 @@ function readFirstString(
   return undefined
 }
 
+function readFirstFiniteNumber(
+  record: Record<string, unknown>,
+  keys: readonly string[]
+): number | undefined {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      return value
+    }
+    if (typeof value === 'string') {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed
+      }
+      const time = Date.parse(value)
+      if (Number.isFinite(time) && time > 0) {
+        return time
+      }
+    }
+  }
+  return undefined
+}
+
+function readFirstBoolean(
+  record: Record<string, unknown>,
+  keys: readonly string[]
+): boolean | undefined {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'boolean') {
+      return value
+    }
+  }
+  return undefined
+}
+
 function parseJsonObjectString(value: unknown): Record<string, unknown> | undefined {
   if (typeof value !== 'string' || value.trim().length === 0) {
     return undefined
@@ -561,6 +604,165 @@ function parseJsonObjectString(value: unknown): Record<string, unknown> | undefi
       : undefined
   } catch {
     return undefined
+  }
+}
+
+function collectWorkflowRecords(value: unknown, depth = 0, out: Record<string, unknown>[] = []) {
+  if (depth > 5 || typeof value !== 'object' || value === null) {
+    return out
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectWorkflowRecords(item, depth + 1, out)
+    }
+    return out
+  }
+  const record = value as Record<string, unknown>
+  out.push(record)
+  for (const nested of Object.values(record)) {
+    if (typeof nested === 'string') {
+      const parsed = parseJsonObjectString(nested)
+      if (parsed) {
+        collectWorkflowRecords(parsed, depth + 1, out)
+      }
+    } else {
+      collectWorkflowRecords(nested, depth + 1, out)
+    }
+  }
+  return out
+}
+
+function readFirstWorkflowString(
+  records: readonly Record<string, unknown>[],
+  keys: readonly string[]
+): string | undefined {
+  for (const record of records) {
+    const value = readFirstString(record, keys)
+    if (value) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function readFirstWorkflowBoolean(
+  records: readonly Record<string, unknown>[],
+  keys: readonly string[]
+): boolean | undefined {
+  for (const record of records) {
+    const value = readFirstBoolean(record, keys)
+    if (value !== undefined) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function readFirstWorkflowNumber(
+  records: readonly Record<string, unknown>[],
+  keys: readonly string[]
+): number | undefined {
+  for (const record of records) {
+    const value = readFirstFiniteNumber(record, keys)
+    if (value !== undefined) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function normalizeWorkflowStatus(value: string | undefined): string {
+  return (
+    value
+      ?.trim()
+      .toLowerCase()
+      .replace(/[-_\s]+/g, '-') ?? ''
+  )
+}
+
+function extractClaudeWorkflowRecovery(
+  paneKey: string,
+  worktreeId: string | undefined,
+  hookPayload: Record<string, unknown>
+): ClaudeWorkflowRecoveryHookMetadata | undefined {
+  const toolName = readString(hookPayload, 'tool_name')
+  const candidateRecords = collectWorkflowRecords({
+    payload: hookPayload,
+    tool_input: hookPayload.tool_input,
+    tool_response: hookPayload.tool_response
+  })
+  const scriptPath = readFirstWorkflowString(candidateRecords, ['scriptPath', 'script_path'])
+  const resumeFromRunId = readFirstWorkflowString(candidateRecords, [
+    'resumeFromRunId',
+    'resume_from_run_id'
+  ])
+  const transcriptDir = readFirstWorkflowString(candidateRecords, [
+    'transcriptDir',
+    'transcript_dir',
+    'transcriptsDir',
+    'transcripts_dir'
+  ])
+  const transcriptPath = readFirstWorkflowString(candidateRecords, [
+    'transcriptPath',
+    'transcript_path'
+  ])
+  const looksLikeWorkflowTool =
+    typeof toolName === 'string' && toolName.trim().toLowerCase() === 'workflow'
+  if (!scriptPath && !resumeFromRunId && !looksLikeWorkflowTool) {
+    return undefined
+  }
+
+  const explicitActive = readFirstWorkflowBoolean(candidateRecords, [
+    'hasActiveChildWork',
+    'has_active_child_work',
+    'activeChildWork',
+    'active_child_work',
+    'childActive',
+    'child_active',
+    'isRunning',
+    'is_running',
+    'active'
+  ])
+  const status = normalizeWorkflowStatus(
+    readFirstWorkflowString(candidateRecords, ['workflowStatus', 'workflow_status', 'status'])
+  )
+  const finished =
+    status === 'done' ||
+    status === 'completed' ||
+    status === 'complete' ||
+    status === 'succeeded' ||
+    status === 'success' ||
+    status === 'failed' ||
+    status === 'cancelled' ||
+    status === 'canceled'
+  const hasActiveChildWork = explicitActive ?? !finished
+
+  return {
+    workflowId:
+      readFirstWorkflowString(candidateRecords, ['workflowId', 'workflow_id']) ??
+      buildClaudeWorkflowId({
+        parentPaneKey: paneKey,
+        scriptPath,
+        resumeFromRunId,
+        transcriptDir,
+        transcriptPath
+      }),
+    parentPaneKey:
+      readFirstWorkflowString(candidateRecords, ['parentPaneKey', 'parent_pane_key']) ?? paneKey,
+    worktreeId,
+    scriptPath,
+    transcriptDir,
+    transcriptPath,
+    resumeFromRunId,
+    hasActiveChildWork,
+    updatedAt: readFirstWorkflowNumber(candidateRecords, [
+      'workflowUpdatedAt',
+      'workflow_updated_at',
+      'scriptMtimeMs',
+      'script_mtime_ms',
+      'scriptModifiedAt',
+      'script_modified_at'
+    ])
   }
 }
 
@@ -2858,6 +3060,10 @@ export function normalizeHookPayload(
         toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
         toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
+        workflowRecoveryLookup:
+          source === 'claude'
+            ? extractClaudeWorkflowRecovery(paneKey, worktreeId, hookPayloadRecord)
+            : undefined,
         payload
       }
     : null

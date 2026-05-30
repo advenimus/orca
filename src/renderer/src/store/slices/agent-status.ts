@@ -14,6 +14,7 @@ import {
 import type { TerminalTab } from '../../../../shared/types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
+import type { ClaudeWorkflowRecoveryMetadata } from '../../../../shared/claude-workflow-actions'
 
 /** Snapshot of a finished (or vanished) agent status entry, kept around so
  *  the dashboard + sidebar hover can continue showing the completion until the
@@ -55,7 +56,10 @@ export type AgentStatusSlice = {
   /** Update or insert an agent status entry from a status payload. */
   setAgentStatus: (
     paneKey: string,
-    payload: ParsedAgentStatusPayload & { orchestration?: AgentStatusOrchestrationContext },
+    payload: ParsedAgentStatusPayload & {
+      orchestration?: AgentStatusOrchestrationContext
+      workflowRecovery?: ClaudeWorkflowRecoveryMetadata
+    },
     terminalTitle?: string,
     timing?: { updatedAt?: number; stateStartedAt?: number }
   ) => void
@@ -257,6 +261,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // worker completes and the active dispatch closes. Preserve the last
           // known parent-child link so done/retained rows stay grouped.
           orchestration: payload.orchestration ?? existing?.orchestration,
+          workflowRecovery: payload.workflowRecovery ?? existing?.workflowRecovery,
           // Why: interrupted lives on `done` only. parseAgentStatusPayload
           // already clamps it to `undefined` for non-done states, so writing
           // the field through directly preserves truth for done and resets
@@ -295,6 +300,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.toolInput !== existing.toolInput ||
             entry.lastAssistantMessage !== existing.lastAssistantMessage ||
             entry.orchestration !== existing.orchestration ||
+            entry.workflowRecovery !== existing.workflowRecovery ||
             entry.interrupted !== existing.interrupted)
         const retentionRelevantChange = sortRelevantChange || doneRetentionFieldsChanged
         // Why: a new status event means the agent is live again — lift any

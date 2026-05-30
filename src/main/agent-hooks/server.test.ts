@@ -76,6 +76,80 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
+  it('extracts Claude workflow recovery sidecar before generic status normalization', () => {
+    const normalized = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Workflow',
+        tool_response: {
+          scriptPath: '/tmp/workflow.js',
+          resumeFromRunId: 'run-1',
+          transcriptDir: '/tmp/transcripts'
+        }
+      }),
+      'production'
+    )
+
+    expect(normalized).toEqual(
+      expect.objectContaining({
+        paneKey: PANE,
+        workflowRecoveryLookup: expect.objectContaining({
+          parentPaneKey: PANE,
+          scriptPath: '/tmp/workflow.js',
+          resumeFromRunId: 'run-1',
+          transcriptDir: '/tmp/transcripts',
+          hasActiveChildWork: true
+        }),
+        payload: expect.objectContaining({
+          state: 'working',
+          agentType: 'claude'
+        })
+      })
+    )
+  })
+
+  it('stamps remote workflow recovery metadata without enabling local reveal actions', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'p', agentType: 'claude' },
+          workflowRecoveryLookup: {
+            workflowId: 'wf-remote',
+            parentPaneKey: PANE,
+            worktreeId: 'wt-1',
+            scriptPath: '/remote/workflow.js',
+            resumeFromRunId: 'run-remote',
+            hasActiveChildWork: true
+          }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          workflowRecovery: expect.objectContaining({
+            workflowId: 'wf-remote',
+            worktreeId: 'wt-1',
+            isResumable: true,
+            actions: expect.objectContaining({
+              copyResumeCommand: { available: true },
+              revealScript: { available: false, disabledReason: 'remote-path' }
+            })
+          })
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('applies inferred interrupts through the cached status lifecycle', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

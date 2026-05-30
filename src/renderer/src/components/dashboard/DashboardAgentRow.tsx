@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: this row owns the dense agent-row layout,
+   expansion behavior, nested controls, and secondary status lines in one
+   component so dashboard/sidebar row rendering stays pixel-aligned. */
 import React, { useState, useCallback } from 'react'
 import { X, Wrench, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -7,7 +10,9 @@ import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
+import { DashboardAgentWorkflowActions } from './DashboardAgentWorkflowActions'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { ClaudeWorkflowRecoveryMetadata } from '../../../../shared/claude-workflow-actions'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 
 // Why: the dashboard tracks its own rollup states (incl. 'idle'); narrow to the
@@ -75,6 +80,7 @@ type Props = {
    *  through so the caller can acknowledge (mark-visited) the specific row
    *  that was clicked, without having to re-derive it from the tab id. */
   onActivate: (tabId: string, paneKey: string) => void
+  onOpenWorkflowParent?: (workflow: ClaudeWorkflowRecoveryMetadata) => boolean
   /**
    * Why: the relative-time labels ("Xm ago") need a periodic re-render to stay
    * honest. We accept `now` from a parent container so a single 30s tick owned
@@ -127,6 +133,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   agent,
   onDismiss,
   onActivate,
+  onOpenWorkflowParent,
   now,
   isUnvisited = false,
   stateDotSize = 'md',
@@ -186,6 +193,13 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     },
     [onActivate, agent.tab.id, agent.paneKey]
   )
+  const workflowRecovery = agent.entry.workflowRecovery
+  const fallbackOpenWorkflowParent = useCallback(() => {
+    if (!workflowRecovery) {
+      return
+    }
+    onActivate(agent.tab.id, workflowRecovery.parentPaneKey)
+  }, [agent.tab.id, onActivate, workflowRecovery])
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
   const prompt = agent.entry.prompt.trim()
@@ -354,6 +368,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         >
           {displayLabel}
         </span>
+        {workflowRecovery?.isStale && (
+          <span className="shrink-0 text-[10px] leading-none text-muted-foreground/70">
+            workflow stale
+          </span>
+        )}
         {/* Why: "+N" badge mirrors the leading chevron — without it the
             parent row reads identical to a leaf row when collapsed, and the
             child count is invisible. Hidden when expanded because the
@@ -370,6 +389,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             place. State belongs in the leading gutter; repeating it here as
             text makes interrupted rows look like the old badge treatment. */}
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {workflowRecovery && (
+            <DashboardAgentWorkflowActions
+              workflowRecovery={workflowRecovery}
+              onOpenWorkflowParent={onOpenWorkflowParent}
+              fallbackOpenParent={fallbackOpenWorkflowParent}
+              stopMouseDown={stopMouseDown}
+              stopKeyDown={stopKeyDown}
+            />
+          )}
           {/* Why: timestamp and dismiss-X share a single slot so passive
               rows show "time ago" and hovered rows swap in the X — no
               reserved-space gap, no competing columns. Grid stacks both

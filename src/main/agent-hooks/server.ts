@@ -44,6 +44,15 @@ import {
   type AgentStatusState,
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
+import type {
+  ClaudeWorkflowRecoveryHookMetadata,
+  ClaudeWorkflowRecoveryMetadata
+} from '../../shared/claude-workflow-actions'
+import {
+  clearClaudeWorkflowRecoveryLookups,
+  dropClaudeWorkflowRecoveryLookupsForPane,
+  registerClaudeWorkflowRecoveryLookup
+} from './claude-workflow-action-registry'
 import {
   isAgentInterruptInputIntent,
   type AgentInterruptInferenceRequest
@@ -64,6 +73,7 @@ export type { AgentHookSource }
 type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   receivedAt: number
   stateStartedAt: number
+  workflowRecovery?: ClaudeWorkflowRecoveryMetadata
 }
 
 export type AgentHookStatusChangeEntry = {
@@ -206,6 +216,13 @@ function sanitizeHydratedEntry(
   if (!payload) {
     return null
   }
+  const workflowRecoveryLookup = sanitizeWorkflowRecoveryLookup(record.workflowRecoveryLookup)
+  const workflowRecovery = workflowRecoveryLookup
+    ? registerClaudeWorkflowRecoveryLookup(workflowRecoveryLookup, {
+        connectionId,
+        receivedAt
+      })
+    : undefined
   return {
     paneKey,
     tabId: typeof tabId === 'string' ? tabId : undefined,
@@ -216,9 +233,43 @@ function sanitizeHydratedEntry(
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
+    workflowRecoveryLookup,
+    workflowRecovery,
     payload,
     receivedAt,
     stateStartedAt
+  }
+}
+
+function readHydratedString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key]
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+}
+
+function sanitizeWorkflowRecoveryLookup(
+  raw: unknown
+): ClaudeWorkflowRecoveryHookMetadata | undefined {
+  if (typeof raw !== 'object' || raw === null) {
+    return undefined
+  }
+  const record = raw as Record<string, unknown>
+  const workflowId = readHydratedString(record, 'workflowId')
+  const parentPaneKey = readHydratedString(record, 'parentPaneKey')
+  const hasActiveChildWork = record.hasActiveChildWork
+  if (!workflowId || !parentPaneKey || typeof hasActiveChildWork !== 'boolean') {
+    return undefined
+  }
+  const updatedAt = record.updatedAt
+  return {
+    workflowId,
+    parentPaneKey,
+    worktreeId: readHydratedString(record, 'worktreeId'),
+    scriptPath: readHydratedString(record, 'scriptPath'),
+    transcriptDir: readHydratedString(record, 'transcriptDir'),
+    transcriptPath: readHydratedString(record, 'transcriptPath'),
+    resumeFromRunId: readHydratedString(record, 'resumeFromRunId'),
+    hasActiveChildWork,
+    updatedAt: typeof updatedAt === 'number' && Number.isFinite(updatedAt) ? updatedAt : undefined
   }
 }
 
@@ -230,7 +281,8 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     connectionId: entry.connectionId,
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
-    ...entry.payload
+    ...entry.payload,
+    workflowRecovery: entry.workflowRecovery
   }
 }
 
@@ -546,10 +598,17 @@ export class AgentHookServer {
       | undefined
     const stateStartedAt =
       previous && previous.payload.state === payload.payload.state ? previous.stateStartedAt : now
+    const workflowRecovery = payload.workflowRecoveryLookup
+      ? registerClaudeWorkflowRecoveryLookup(payload.workflowRecoveryLookup, {
+          connectionId: payload.connectionId,
+          receivedAt: now
+        })
+      : previous?.workflowRecovery
     return {
       ...payload,
       receivedAt: now,
-      stateStartedAt
+      stateStartedAt,
+      workflowRecovery
     }
   }
 
@@ -808,6 +867,7 @@ export class AgentHookServer {
           // this PTY is later proven dead before ptyPaneKey is rebuilt, alias
           // cleanup is the only path that can evict that retained status.
           clearPaneCacheState(this.state, entry.stablePaneKey)
+          dropClaudeWorkflowRecoveryLookupsForPane(entry.stablePaneKey)
           this.runtimeObservedStatusPaneKeys.delete(entry.stablePaneKey)
           this.promptSentDedupeByPaneKey.delete(entry.stablePaneKey)
         }
@@ -865,6 +925,7 @@ export class AgentHookServer {
       toolUseId?: string
       toolAgentId?: string
       toolAgentType?: string
+      workflowRecoveryLookup?: unknown
       isReplay?: boolean
       payload: unknown
     },
@@ -968,6 +1029,7 @@ export class AgentHookServer {
       toolUseId,
       toolAgentId,
       toolAgentType,
+      workflowRecoveryLookup: sanitizeWorkflowRecoveryLookup(envelope.workflowRecoveryLookup),
       isReplay: envelope.isReplay === true ? true : undefined,
       payload: normalizedPayload
     }
@@ -1107,6 +1169,7 @@ export class AgentHookServer {
     this.runtimeObservedStatusPaneKeys.clear()
     this.promptSentDedupeByPaneKey.clear()
     this.legacyPaneKeyAliases.clear()
+    clearClaudeWorkflowRecoveryLookups()
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
   }
@@ -1125,6 +1188,7 @@ export class AgentHookServer {
     }
     const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey)
     this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
+    dropClaudeWorkflowRecoveryLookupsForPane(resolvedPaneKey)
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     if (existing?.payload.state === 'done') {
@@ -1143,6 +1207,7 @@ export class AgentHookServer {
     const hadStatus = this.state.lastStatusByPaneKey.has(resolvedPaneKey)
     this.clearAssistantMessageRetry(resolvedPaneKey)
     clearPaneCacheState(this.state, resolvedPaneKey)
+    dropClaudeWorkflowRecoveryLookupsForPane(resolvedPaneKey)
     this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     let clearedAlias = false
     for (const [legacyPaneKey, stablePaneKey] of this.legacyPaneKeyAliases) {

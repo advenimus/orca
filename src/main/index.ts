@@ -539,6 +539,7 @@ function openMainWindow(): BrowserWindow {
       payload,
       receivedAt,
       stateStartedAt,
+      workflowRecovery,
       isReplay
     }) => {
       if (mainWindow?.isDestroyed()) {
@@ -554,6 +555,7 @@ function openMainWindow(): BrowserWindow {
         connectionId,
         receivedAt,
         stateStartedAt,
+        ...(workflowRecovery ? { workflowRecovery } : {}),
         ...(orchestration ? { orchestration } : {})
       })
       recordCrashBreadcrumb('agent_state_changed', {

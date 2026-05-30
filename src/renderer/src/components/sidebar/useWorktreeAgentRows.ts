@@ -14,6 +14,7 @@ import {
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
+import { refreshClaudeWorkflowRecoveryStaleState } from '../../../../shared/claude-workflow-actions'
 
 // Why: stable empty-array references so narrow selectors return the same
 // reference when there's nothing for this worktree. Without stable empties,
@@ -247,7 +248,15 @@ export function buildWorktreeAgentRows(args: {
         (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')
       rows.push({
         paneKey: entry.paneKey,
-        entry,
+        entry: entry.workflowRecovery
+          ? {
+              ...entry,
+              workflowRecovery: refreshClaudeWorkflowRecoveryStaleState(
+                entry.workflowRecovery,
+                args.now
+              )
+            }
+          : entry,
         tab,
         agentType: entry.agentType ?? 'unknown',
         state: shouldDecay ? 'idle' : entry.state,
@@ -263,7 +272,15 @@ export function buildWorktreeAgentRows(args: {
     }
     rows.push({
       paneKey: ra.entry.paneKey,
-      entry: ra.entry,
+      entry: ra.entry.workflowRecovery
+        ? {
+            ...ra.entry,
+            workflowRecovery: refreshClaudeWorkflowRecoveryStaleState(
+              ra.entry.workflowRecovery,
+              args.now
+            )
+          }
+        : ra.entry,
       tab: ra.tab,
       agentType: ra.agentType,
       state: 'done',

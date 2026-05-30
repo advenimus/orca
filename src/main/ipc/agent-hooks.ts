@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { clipboard, ipcMain, shell } from 'electron'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type {
   AgentStatusIpcPayload,
@@ -21,6 +21,12 @@ import { commandCodeHookService } from '../command-code/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
+import {
+  copyClaudeWorkflowResumeCommand,
+  revealClaudeWorkflowScript,
+  revealClaudeWorkflowTranscripts
+} from '../agent-hooks/claude-workflow-action-registry'
+import type { ClaudeWorkflowRecoveryActionResult } from '../../shared/claude-workflow-actions'
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
@@ -46,6 +52,9 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:hermesStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
+  ipcMain.removeHandler('agentStatus:copyWorkflowResumeCommand')
+  ipcMain.removeHandler('agentStatus:revealWorkflowScript')
+  ipcMain.removeHandler('agentStatus:revealWorkflowTranscripts')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   // Why: agentStatus:drop is sent fire-and-forget from the renderer via
   // ipcRenderer.send(); we listen with ipcMain.on (not handle) so we don't
@@ -78,6 +87,21 @@ export function registerAgentHookHandlers(): void {
     }
     return agentHookServer.inferInterrupt(request as AgentInterruptInferenceRequest)
   })
+  ipcMain.handle(
+    'agentStatus:copyWorkflowResumeCommand',
+    (_event, workflowId: unknown): ClaudeWorkflowRecoveryActionResult =>
+      copyClaudeWorkflowResumeCommand(workflowId, (text) => clipboard.writeText(text))
+  )
+  ipcMain.handle(
+    'agentStatus:revealWorkflowScript',
+    (_event, workflowId: unknown): ClaudeWorkflowRecoveryActionResult =>
+      revealClaudeWorkflowScript(workflowId, (filePath) => shell.showItemInFolder(filePath))
+  )
+  ipcMain.handle(
+    'agentStatus:revealWorkflowTranscripts',
+    (_event, workflowId: unknown): ClaudeWorkflowRecoveryActionResult =>
+      revealClaudeWorkflowTranscripts(workflowId, (dirPath) => shell.showItemInFolder(dirPath))
+  )
   ipcMain.handle(
     'agentStatus:getMigrationUnsupportedSnapshot',
     (): MigrationUnsupportedPtyEntry[] => getMigrationUnsupportedPtySnapshot()

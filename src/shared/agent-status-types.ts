@@ -1,3 +1,5 @@
+import type { ClaudeWorkflowRecoveryMetadata } from './claude-workflow-actions'
+
 // ─── Explicit agent status (reported via native agent hooks → IPC) ──────────
 // These types define the normalized status that Orca receives from Claude,
 // Codex, and other explicit integrations. Agent state normally comes from
@@ -102,6 +104,7 @@ export type AgentStatusEntry = {
    *  Why: parent/child agent hierarchy is pane-level state, not worktree
    *  lineage; workers often run in the same worktree as their coordinator. */
   orchestration?: AgentStatusOrchestrationContext
+  workflowRecovery?: ClaudeWorkflowRecoveryMetadata
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -160,6 +163,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
+  workflowRecovery?: ClaudeWorkflowRecoveryMetadata
 }
 
 /** Maximum character length for the prompt field. Truncated on parse. */

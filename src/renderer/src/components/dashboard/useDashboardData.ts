@@ -11,6 +11,7 @@ import {
 import type { Repo, Worktree, TerminalTab } from '../../../../shared/types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
+import { refreshClaudeWorkflowRecoveryStaleState } from '../../../../shared/claude-workflow-actions'
 
 // ─── Shared data types ────────────────────────────────────────────────────────
 
@@ -80,7 +81,12 @@ function buildAgentRowsForWorktree(
         (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')
       rows.push({
         paneKey: entry.paneKey,
-        entry,
+        entry: entry.workflowRecovery
+          ? {
+              ...entry,
+              workflowRecovery: refreshClaudeWorkflowRecoveryStaleState(entry.workflowRecovery, now)
+            }
+          : entry,
         tab,
         agentType: entry.agentType ?? 'unknown',
         state: shouldDecay ? 'idle' : entry.state,
