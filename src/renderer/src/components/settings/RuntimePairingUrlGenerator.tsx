@@ -112,6 +112,7 @@ export function RuntimePairingUrlGenerator({
   const [isGeneratingPairing, setIsGeneratingPairing] = useState(false)
   const networkInterfaceLoadIdRef = useRef(0)
   const accessGrantLoadIdRef = useRef(0)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const copiedTargetResetTimerRef = useRef<number | null>(null)
 
   const clearCopiedTargetResetTimer = useCallback((): void => {
@@ -250,6 +251,10 @@ export function RuntimePairingUrlGenerator({
       setCopiedTarget(target)
       copiedTargetResetTimerRef.current = window.setTimeout(() => {
         copiedTargetResetTimerRef.current = null
+        // Why: this timer is event-owned, so Settings may close before it fires.
+        if (!containerRef.current?.isConnected) {
+          return
+        }
         setCopiedTarget((current) => (current === target ? null : current))
       }, 1400)
       toast.success(target === 'web' ? 'Copied web client URL.' : 'Copied pairing URL.')
@@ -274,7 +279,7 @@ export function RuntimePairingUrlGenerator({
   }
 
   return (
-    <div className={containerClassName}>
+    <div ref={containerRef} className={containerClassName}>
       {showHeader ? (
         <div className="space-y-1">
           <Label id="runtime-share-server-label">Share this Orca server</Label>
