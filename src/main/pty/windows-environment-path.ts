@@ -75,6 +75,7 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
   const env = options.env ?? process.env
   const pathDelimiter = getPathDelimiter(platform)
   const segments: string[] = []
+  let anyReadFailed = false
 
   for (const [key, valueName] of WINDOWS_PATH_REGISTRY_KEYS) {
     try {
@@ -91,10 +92,11 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
     } catch {
       // Registry access can fail in stripped test containers or remote-like
       // Windows contexts. Existing PATH remains the fallback in those cases.
+      anyReadFailed = true
     }
   }
 
-  if (useProductionCache) {
+  if (useProductionCache && !anyReadFailed) {
     // Why: local PTY spawn is a hot path on Windows, and each uncached read
     // runs two synchronous `reg.exe query` subprocesses. A short TTL keeps
     // terminal bursts cheap while still picking up newly installed CLIs soon.
