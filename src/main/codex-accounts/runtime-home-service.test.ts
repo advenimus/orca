@@ -195,6 +195,11 @@ function expectResourceLinkedOrCopied(targetPath: string, sourcePath: string): v
   expect(normalizeLinkTarget(readlinkSync(targetPath))).toBe(normalizeLinkTarget(sourcePath))
 }
 
+function expectResourceLinked(targetPath: string, sourcePath: string): void {
+  expect(lstatSync(targetPath).isSymbolicLink()).toBe(true)
+  expect(normalizeLinkTarget(readlinkSync(targetPath))).toBe(normalizeLinkTarget(sourcePath))
+}
+
 function createStore(settings: GlobalSettings) {
   return {
     getSettings: vi.fn(() => settings),
@@ -640,6 +645,155 @@ describe('CodexRuntimeHomeService', () => {
       join(launchHome2!, 'sessions'),
       join(getRuntimeCodexHomePath(), 'sessions')
     )
+  })
+
+  it('links Codex sqlite runtime state into each selected host launch home', async () => {
+    const account1Auth = createCodexAuthJson('one@example.com', 'acct-one', 'one')
+    const account2Auth = createCodexAuthJson('two@example.com', 'acct-two', 'two')
+    const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+    const managedHomePath2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+    const sqliteEntries = [
+      'state_5.sqlite',
+      'state_5.sqlite-wal',
+      'state_5.sqlite-shm',
+      'logs_2.sqlite',
+      'logs_2.sqlite-wal',
+      'logs_2.sqlite-shm',
+      'goals_1.sqlite',
+      'memories_1.sqlite'
+    ]
+    for (const entryName of sqliteEntries) {
+      writeFileSync(join(getRuntimeCodexHomePath(), entryName), `${entryName}\n`, 'utf-8')
+    }
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'one@example.com',
+          managedHomePath: managedHomePath1,
+          providerAccountId: 'acct-one',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-one',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'two@example.com',
+          managedHomePath: managedHomePath2,
+          providerAccountId: 'acct-two',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-two',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    const launchHome1 = service.prepareForCodexLaunch()
+    settings.activeCodexManagedAccountId = 'account-2'
+    settings.activeCodexManagedAccountIdsByRuntime = { host: 'account-2', wsl: {} }
+    const launchHome2 = service.prepareForCodexLaunch()
+
+    expect(readFileSync(join(launchHome1!, 'auth.json'), 'utf-8')).toBe(account1Auth)
+    expect(readFileSync(join(launchHome2!, 'auth.json'), 'utf-8')).toBe(account2Auth)
+    expect(lstatSync(join(launchHome1!, 'auth.json')).isSymbolicLink()).toBe(false)
+    expect(lstatSync(join(launchHome2!, 'auth.json')).isSymbolicLink()).toBe(false)
+    for (const entryName of sqliteEntries) {
+      const sharedPath = join(getRuntimeCodexHomePath(), entryName)
+      expectResourceLinked(join(launchHome1!, entryName), sharedPath)
+      expectResourceLinked(join(launchHome2!, entryName), sharedPath)
+    }
+  })
+
+  it('replaces prior launch-home sqlite forks with shared runtime links', async () => {
+    const accountAuth = createCodexAuthJson('user@example.com', 'acct-1', 'token')
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', accountAuth)
+    writeFileSync(join(getRuntimeCodexHomePath(), 'state_5.sqlite'), 'shared-state\n', 'utf-8')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-1',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-1',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    const launchHome = service.prepareForCodexLaunch()
+    rmSync(join(launchHome!, 'state_5.sqlite'), { force: true })
+    writeFileSync(join(launchHome!, 'state_5.sqlite'), 'forked-launch-state\n', 'utf-8')
+
+    const refreshedLaunchHome = service.prepareForCodexLaunch()
+
+    expect(refreshedLaunchHome).toBe(launchHome)
+    expectResourceLinked(
+      join(refreshedLaunchHome!, 'state_5.sqlite'),
+      join(getRuntimeCodexHomePath(), 'state_5.sqlite')
+    )
+    expect(readFileSync(join(refreshedLaunchHome!, 'state_5.sqlite'), 'utf-8')).toBe(
+      'shared-state\n'
+    )
+    expect(readFileSync(join(refreshedLaunchHome!, 'auth.json'), 'utf-8')).toBe(accountAuth)
+  })
+
+  it('prelinks missing sqlite sidecars into the shared runtime home', async () => {
+    const accountAuth = createCodexAuthJson('user@example.com', 'acct-1', 'token')
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', accountAuth)
+    writeFileSync(join(getRuntimeCodexHomePath(), 'state_5.sqlite'), 'shared-state\n', 'utf-8')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: 'acct-1',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-1',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    const launchHome = service.prepareForCodexLaunch()
+
+    expectResourceLinked(
+      join(launchHome!, 'state_5.sqlite'),
+      join(getRuntimeCodexHomePath(), 'state_5.sqlite')
+    )
+    expectResourceLinked(
+      join(launchHome!, 'state_5.sqlite-wal'),
+      join(getRuntimeCodexHomePath(), 'state_5.sqlite-wal')
+    )
+    expectResourceLinked(
+      join(launchHome!, 'state_5.sqlite-shm'),
+      join(getRuntimeCodexHomePath(), 'state_5.sqlite-shm')
+    )
+    expect(existsSync(join(getRuntimeCodexHomePath(), 'state_5.sqlite-wal'))).toBe(false)
+    expect(existsSync(join(getRuntimeCodexHomePath(), 'state_5.sqlite-shm'))).toBe(false)
+    expect(readFileSync(join(launchHome!, 'auth.json'), 'utf-8')).toBe(accountAuth)
   })
 
   it('ignores stale shared auth when preparing a different selected launch home', async () => {
@@ -1249,6 +1403,94 @@ describe('CodexRuntimeHomeService', () => {
         join(secondLaunchHomePath!, 'sessions'),
         join(wslRuntimeHomePath, 'sessions')
       )
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('links WSL sqlite runtime state into each selected WSL launch home', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const wslHome = join(testState.userDataDir, 'wsl-home')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome
+    }))
+    const firstAuth = createCodexAuthJson('first@example.com', 'acct-first', 'first-token')
+    const secondAuth = createCodexAuthJson('second@example.com', 'acct-second', 'second-token')
+    const firstManagedHomePath = createManagedAuth(testState.userDataDir, 'account-1', firstAuth)
+    const secondManagedHomePath = createManagedAuth(testState.userDataDir, 'account-2', secondAuth)
+    const wslRuntimeHomePath = getWslRuntimeCodexHomePath(wslHome)
+    const sqliteEntries = [
+      'state_5.sqlite',
+      'state_5.sqlite-wal',
+      'state_5.sqlite-shm',
+      'logs_2.sqlite',
+      'logs_2.sqlite-wal',
+      'logs_2.sqlite-shm',
+      'goals_1.sqlite',
+      'memories_1.sqlite'
+    ]
+    mkdirSync(wslRuntimeHomePath, { recursive: true })
+    for (const entryName of sqliteEntries) {
+      writeFileSync(join(wslRuntimeHomePath, entryName), `${entryName}\n`, 'utf-8')
+    }
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'first@example.com',
+          managedHomePath: firstManagedHomePath,
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/account-1/home',
+          providerAccountId: 'acct-first',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-first',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'second@example.com',
+          managedHomePath: secondManagedHomePath,
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/account-2/home',
+          providerAccountId: 'acct-second',
+          workspaceLabel: null,
+          workspaceAccountId: 'acct-second',
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: null,
+      activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'account-1' } }
+    })
+    const store = createStore(settings)
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+      const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
+
+      const firstLaunchHomePath = service.prepareForCodexLaunch(target)
+      settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: { Ubuntu: 'account-2' } }
+      const secondLaunchHomePath = service.prepareForCodexLaunch(target)
+
+      expect(readFileSync(join(firstLaunchHomePath!, 'auth.json'), 'utf-8')).toBe(firstAuth)
+      expect(readFileSync(join(secondLaunchHomePath!, 'auth.json'), 'utf-8')).toBe(secondAuth)
+      expect(lstatSync(join(firstLaunchHomePath!, 'auth.json')).isSymbolicLink()).toBe(false)
+      expect(lstatSync(join(secondLaunchHomePath!, 'auth.json')).isSymbolicLink()).toBe(false)
+      for (const entryName of sqliteEntries) {
+        const sharedPath = join(wslRuntimeHomePath, entryName)
+        expectResourceLinked(join(firstLaunchHomePath!, entryName), sharedPath)
+        expectResourceLinked(join(secondLaunchHomePath!, entryName), sharedPath)
+      }
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)

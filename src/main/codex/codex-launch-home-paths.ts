@@ -163,12 +163,47 @@ function getLaunchSelectionSegment(accountId: string | null): string {
 
 function listSharedLaunchEntryNames(sharedHomePath: string): string[] {
   try {
-    return readdirSync(sharedHomePath)
-      .filter((entryName) => SHARED_LAUNCH_ENTRY_NAMES.has(entryName))
-      .sort()
+    const sharedEntries = new Set<string>()
+    for (const entryName of readdirSync(sharedHomePath)) {
+      if (!isSharedLaunchEntryName(entryName)) {
+        continue
+      }
+      sharedEntries.add(entryName)
+      if (entryName.endsWith('.sqlite')) {
+        sharedEntries.add(`${entryName}-wal`)
+        sharedEntries.add(`${entryName}-shm`)
+      }
+    }
+    return [...sharedEntries].sort()
   } catch {
     return []
   }
+}
+
+function isSharedLaunchEntryName(entryName: string): boolean {
+  return SHARED_LAUNCH_ENTRY_NAMES.has(entryName) || isCodexSqliteEntryName(entryName)
+}
+
+function isCodexSqliteEntryName(entryName: string): boolean {
+  return (
+    entryName.endsWith('.sqlite') ||
+    entryName.endsWith('.sqlite-wal') ||
+    entryName.endsWith('.sqlite-shm')
+  )
+}
+
+function isCodexSqliteSidecarEntryName(entryName: string): boolean {
+  return entryName.endsWith('.sqlite-wal') || entryName.endsWith('.sqlite-shm')
+}
+
+function getCodexSqliteMainEntryName(entryName: string): string | null {
+  if (entryName.endsWith('.sqlite-wal')) {
+    return entryName.slice(0, -'-wal'.length)
+  }
+  if (entryName.endsWith('.sqlite-shm')) {
+    return entryName.slice(0, -'-shm'.length)
+  }
+  return null
 }
 
 function linkSharedEntryIntoLaunchHome(
@@ -181,7 +216,7 @@ function linkSharedEntryIntoLaunchHome(
   const existingMarker = readLaunchEntryMarker(launchHomePath, entryName)
   reconcileMutableLaunchEntryIfNeeded(sourcePath, targetPath, existingMarker)
 
-  if (!existsSync(sourcePath)) {
+  if (!existsSync(sourcePath) && !canLinkMissingSharedEntry(sharedHomePath, entryName)) {
     removeLaunchEntryIfOwned(targetPath, launchHomePath, entryName, sourcePath)
     return
   }
@@ -193,7 +228,10 @@ function linkSharedEntryIntoLaunchHome(
   const ownedTarget =
     existingMarker?.sourcePath === sourcePath && targetExistsForLaunchRemoval(targetPath)
   if (targetExistsForLaunchRemoval(targetPath) && !ownedTarget) {
-    return
+    if (!replaceUnownedLaunchEntryAllowed(launchHomePath, entryName)) {
+      return
+    }
+    removeLaunchEntry(targetPath)
   }
   if (ownedTarget) {
     removeLaunchEntry(targetPath)
@@ -226,11 +264,11 @@ function createSharedEntryLink(sourcePath: string, targetPath: string): void {
   if (createWslSymlinkIfPossible(sourcePath, targetPath)) {
     return
   }
-  const sourceStat = lstatSync(sourcePath)
+  const sourceStat = existsSync(sourcePath) ? lstatSync(sourcePath) : null
   symlinkSync(
     sourcePath,
     targetPath,
-    sourceStat.isDirectory() && process.platform === 'win32' ? 'junction' : undefined
+    sourceStat?.isDirectory() && process.platform === 'win32' ? 'junction' : undefined
   )
 }
 
@@ -336,8 +374,27 @@ function copyFallbackAllowed(sourcePath: string, entryName: string): boolean {
   if (entryName === 'hooks.json') {
     return false
   }
+  if (isCodexSqliteEntryName(entryName)) {
+    // Why: copying SQLite/WAL/SHM files forks Codex state and breaks lock coherence.
+    return false
+  }
   const sourceStat = lstatSync(sourcePath)
   return !sourceStat.isDirectory() || !MUTABLE_SHARED_DIRECTORY_ENTRIES.has(entryName)
+}
+
+function canLinkMissingSharedEntry(sharedHomePath: string, entryName: string): boolean {
+  const mainEntryName = getCodexSqliteMainEntryName(entryName)
+  return (
+    isCodexSqliteSidecarEntryName(entryName) &&
+    mainEntryName !== null &&
+    existsSync(join(sharedHomePath, mainEntryName))
+  )
+}
+
+function replaceUnownedLaunchEntryAllowed(launchHomePath: string, entryName: string): boolean {
+  // Why: older launch-home builds let Codex create local DB forks before the
+  // shared SQLite link policy existed; those forks must be replaced in place.
+  return isCodexSqliteEntryName(entryName) && existsSync(join(launchHomePath, LAUNCH_HOME_MARKER))
 }
 
 function isContainedPath(rootPath: string, candidatePath: string): boolean {
