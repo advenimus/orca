@@ -36,10 +36,12 @@ import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { TerminalErrorToast } from './TerminalErrorToast'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
+import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
+import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
@@ -179,6 +181,7 @@ export default function TerminalPane({
   // Why: the terminal menu can be the first quick-command entry point, so each
   // Add action starts with a fresh draft instead of reusing cancelled text.
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
+  const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   // Why: override state lives in a plain Map for perf (safeFit reads it on
@@ -1546,6 +1549,7 @@ export default function TerminalPane({
     onRequestClosePane: handleRequestClosePane,
     onSetTitle: handleStartRename,
     onPasteError: setTerminalError,
+    onAgentSessionForkReady: setAgentSessionFork,
     rightClickToPaste
   })
 
@@ -1747,6 +1751,7 @@ export default function TerminalPane({
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
+        onForkAgentSession={() => void contextMenu.onForkAgentSession()}
         repoQuickCommands={repoQuickCommands}
         globalQuickCommands={globalQuickCommands}
         quickCommandRepoLabel={quickCommandRepoLabel}
@@ -1767,6 +1772,15 @@ export default function TerminalPane({
         repos={repos}
         onOpenChange={setQuickCommandEditorOpen}
         onSave={saveQuickCommand}
+      />
+      <TerminalAgentSessionForkDialog
+        open={agentSessionFork !== null}
+        fork={agentSessionFork}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAgentSessionFork(null)
+          }
+        }}
       />
       {/* Title bar overlays — portaled into each pane container that has a title
           or is currently being renamed (so the inline input appears even for

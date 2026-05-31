@@ -1409,6 +1409,7 @@ export type PreloadApi = {
     markTrusted: (args: {
       preset: 'cursor' | 'copilot' | 'codex'
       workspacePath: string
+      connectionId?: string
     }) => Promise<void>
   }
   preflight: PreflightApi
