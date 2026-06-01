@@ -164,17 +164,25 @@ export function AgentTerminalPopover({
     )
   }, [])
 
-  const scheduleClose = useCallback(() => {
-    clearOpenTimer()
-    clearCloseTimer()
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null
-      if (hasPointerInsideSurface() || isInsidePopoverSurface(document.activeElement)) {
-        return
-      }
-      closeNow()
-    }, CLOSE_DELAY_MS)
-  }, [clearCloseTimer, clearOpenTimer, closeNow, hasPointerInsideSurface, isInsidePopoverSurface])
+  const scheduleClose = useCallback(
+    ({ preserveFocusedSurface = false }: { preserveFocusedSurface?: boolean } = {}) => {
+      clearOpenTimer()
+      clearCloseTimer()
+      closeTimerRef.current = window.setTimeout(() => {
+        closeTimerRef.current = null
+        if (hasPointerInsideSurface()) {
+          return
+        }
+        // Why: terminal focus can outlive hover after the user clicks xterm.
+        // Only focus-driven close paths may keep a focused surface pinned.
+        if (preserveFocusedSurface && isInsidePopoverSurface(document.activeElement)) {
+          return
+        }
+        closeNow()
+      }, CLOSE_DELAY_MS)
+    },
+    [clearCloseTimer, clearOpenTimer, closeNow, hasPointerInsideSurface, isInsidePopoverSurface]
+  )
 
   const handleAnchorPointerEnter = useCallback(() => {
     anchorPointerInsideRef.current = true
@@ -311,7 +319,7 @@ export function AgentTerminalPopover({
       if (hasPointerInsideSurface()) {
         return
       }
-      scheduleClose()
+      scheduleClose({ preserveFocusedSurface: true })
     },
     [hasPointerInsideSurface, isInsidePopoverSurface, scheduleClose]
   )

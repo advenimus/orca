@@ -601,6 +601,11 @@ test.describe('Activity Agent Pane Isolation', () => {
         leafIdsInsidePopover: [thread.leafId],
         hasXtermScreen: true
       })
+
+    // Why: terminal focus should not pin a hover popover open after the
+    // pointer leaves both the row and the popover surface.
+    await orcaPage.mouse.move(8, 8)
+    await expect(content).toBeHidden({ timeout: 5_000 })
   })
 
   test('background workspace terminal popover accepts input without switching workspaces', async ({

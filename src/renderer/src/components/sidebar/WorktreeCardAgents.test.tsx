@@ -303,6 +303,56 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('data-pane-key="tab-stale:1" data-popover="false"')
   })
 
+  it('wires terminal popovers to compact agent rows when compact mode is active', async () => {
+    const leafId = '55555555-5555-4555-8555-555555555555'
+    mockAgentActivityDisplayMode = 'compact'
+    mockExperimentalAgentTerminalPopover = true
+    mockAgents = [
+      mockAgent({
+        paneKey: `tab-1:${leafId}`,
+        tabId: 'tab-1',
+        agentType: 'codex',
+        prompt: 'Run tests'
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('group/compact-agent-row')
+    expect(markup).toContain('data-agent-terminal-popover-row=""')
+    expect(markup).toContain('Run tests')
+  })
+
+  it('keeps compact rows visible instead of an aggregate summary when terminal popovers are enabled', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockExperimentalAgentTerminalPopover = true
+    mockAgents = [
+      mockAgent({
+        paneKey: 'tab-1:66666666-6666-4666-8666-666666666666',
+        agentType: 'codex',
+        state: 'done',
+        startedAt: 1000,
+        prompt: 'First agent'
+      }),
+      mockAgent({
+        paneKey: 'tab-1:77777777-7777-4777-8777-777777777777',
+        agentType: 'claude',
+        state: 'done',
+        startedAt: 1500,
+        prompt: 'Second agent'
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).not.toContain('All 2 agents done')
+    expect(markup).toContain('First agent')
+    expect(markup).toContain('Second agent')
+    expect(markup.match(/data-agent-terminal-popover-row=""/g)).toHaveLength(2)
+  })
+
   it('renders a compact summary affordance for two flat agents', async () => {
     mockAgentActivityDisplayMode = 'compact'
     mockAgents = [
