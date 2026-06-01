@@ -503,6 +503,185 @@ describe('CodexAccountService config sync', () => {
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
   })
 
+  it('recreates the expected missing managed home before reauthenticating', async () => {
+    vi.resetModules()
+
+    const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+    const canonicalConfig = 'sandbox_mode = "danger-full-access"\n'
+    writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
+
+    const managedHomePath = join(testState.userDataDir, 'codex-accounts', 'account-1', 'home')
+    const spawnMock = vi.fn(
+      (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+        const loginHome = options.env.CODEX_HOME
+        expect(loginHome).toBeTruthy()
+        expect(readFileSync(join(loginHome!, '.orca-managed-home'), 'utf-8')).toBe(
+          'account-1\n'
+        )
+        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough
+          stderr: PassThrough
+          kill: () => void
+        }
+        child.stdout = new PassThrough()
+        child.stderr = new PassThrough()
+        child.kill = vi.fn()
+        writeFileSync(
+          join(loginHome!, 'auth.json'),
+          createCodexAuthJson('new@example.com', 'provider-account-1', 'refresh-token'),
+          'utf-8'
+        )
+        queueMicrotask(() => child.emit('close', 0))
+        return child
+      }
+    )
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: spawnMock
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'old@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+
+    const result = await service.reauthenticateAccount('account-1')
+
+    expect(result.accounts[0]).toMatchObject({
+      email: 'new@example.com',
+      providerAccountId: 'provider-account-1'
+    })
+    expect(existsSync(managedHomePath)).toBe(true)
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
+    warnSpy.mockRestore()
+  })
+
+  it('does not recreate a missing managed home at a different account path', async () => {
+    vi.resetModules()
+    const managedHomePath = join(testState.userDataDir, 'codex-accounts', 'other-account', 'home')
+    const expectedManagedHomePath = join(
+      testState.userDataDir,
+      'codex-accounts',
+      'account-1',
+      'home'
+    )
+    const spawnMock = vi.fn()
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: spawnMock
+    }))
+
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+
+    await expect(service.reauthenticateAccount('account-1')).rejects.toThrow(
+      'Managed Codex home directory does not exist on disk.'
+    )
+    expect(existsSync(expectedManagedHomePath)).toBe(false)
+    expect(spawnMock).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('does not trust an existing managed home that is missing its ownership marker', async () => {
+    vi.resetModules()
+    const managedHomePath = join(testState.userDataDir, 'codex-accounts', 'account-1', 'home')
+    mkdirSync(managedHomePath, { recursive: true })
+    const spawnMock = vi.fn()
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: spawnMock
+    }))
+
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+
+    await expect(service.reauthenticateAccount('account-1')).rejects.toThrow(
+      'Managed Codex home is missing Orca ownership marker.'
+    )
+    expect(spawnMock).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
   it('adds a managed Codex account inside WSL when the account context is WSL', async () => {
     vi.resetModules()
     const originalPlatform = process.platform
@@ -728,6 +907,122 @@ describe('CodexAccountService config sync', () => {
       })
       expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
     } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('recreates the expected missing WSL managed home before reauthenticating', async () => {
+    vi.resetModules()
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    const wslManagedHomePath = join(testState.userDataDir, 'wsl-account', 'home')
+    const wslLinuxHomePath = '/home/alice/.local/share/orca/codex-accounts/account-1/home'
+
+    const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
+      const script = decodeEncodedWslBashCommand(String(args.at(-1)))
+      if (script.includes('mkdir -p -- "$candidate"')) {
+        mkdirSync(wslManagedHomePath, { recursive: true })
+        writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-1\n', 'utf-8')
+        return ''
+      }
+      if (script.includes('readlink -f')) {
+        return `${wslLinuxHomePath}\n`
+      }
+      return ''
+    })
+    const spawnMock = vi.fn((command: string, args: string[]) => {
+      expect(command).toBe('wsl.exe')
+      expect(args).toEqual([
+        '-d',
+        'Ubuntu',
+        '--',
+        'bash',
+        '-lc',
+        `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
+      ])
+      expect(readFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'utf-8')).toBe(
+        'account-1\n'
+      )
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: PassThrough
+        stderr: PassThrough
+        kill: () => void
+      }
+      child.stdout = new PassThrough()
+      child.stderr = new PassThrough()
+      child.kill = vi.fn()
+      writeFileSync(
+        join(wslManagedHomePath, 'auth.json'),
+        createCodexAuthJson('new-wsl@example.com', 'provider-wsl-1', 'refresh-token'),
+        'utf-8'
+      )
+      queueMicrotask(() => child.emit('close', 0))
+      return child
+    })
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: execFileSyncMock,
+      spawn: spawnMock
+    }))
+    vi.doMock('../../shared/wsl-paths', () => ({
+      parseWslUncPath: (path: string) =>
+        path === wslManagedHomePath ? { distro: 'Ubuntu', linuxPath: wslLinuxHomePath } : null
+    }))
+    vi.doMock('../wsl', () => ({
+      toWindowsWslPath: () => wslManagedHomePath
+    }))
+
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'old-wsl@example.com',
+          managedHomePath: wslManagedHomePath,
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+
+      const result = await service.reauthenticateAccount('account-1')
+
+      expect(result.accounts[0]).toMatchObject({
+        email: 'new-wsl@example.com',
+        providerAccountId: 'provider-wsl-1',
+        managedHomeRuntime: 'wsl',
+        wslDistro: 'Ubuntu'
+      })
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform
