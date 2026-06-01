@@ -46,7 +46,7 @@ describe('contextual tour definitions', () => {
     // Two steps only: tasks and orchestration education lives in their own
     // page tours, so the in-app tour ends after the worktree CTA.
     expect(tour?.steps.map((step) => step.title)).toEqual([
-      'Work side by side',
+      'Split a terminal pane',
       'Run another task in parallel'
     ])
     // The opening step teaches the split gesture and offers the convenience button.

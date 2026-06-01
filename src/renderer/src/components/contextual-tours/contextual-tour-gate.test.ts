@@ -250,7 +250,7 @@ describe('contextual tour gate', () => {
     const visibleStepIndexes = getVisibleContextualTourStepIndexes(tour, targetExists)
 
     expect(tour.steps.map((step) => step.title)).toEqual([
-      'Work side by side',
+      'Split a terminal pane',
       'Run another task in parallel'
     ])
     expect(visibleStepIndexes).toEqual([0, 1])
