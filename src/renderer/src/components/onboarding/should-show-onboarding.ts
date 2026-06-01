@@ -5,15 +5,3 @@ import type { OnboardingState } from '../../../../shared/types'
 export function shouldShowOnboarding(onboarding: OnboardingState | null): boolean {
   return onboarding !== null && onboarding.closedAt === null
 }
-
-export function shouldCloseAppModalForOnboarding(args: {
-  onboarding: OnboardingState | null
-  onboardingSettingsDetour: boolean
-  activeModal: string
-}): boolean {
-  return (
-    shouldShowOnboarding(args.onboarding) &&
-    !args.onboardingSettingsDetour &&
-    args.activeModal !== 'none'
-  )
-}

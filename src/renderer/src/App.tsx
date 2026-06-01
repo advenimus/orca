@@ -48,10 +48,7 @@ import { StarNagCard } from './components/StarNagCard'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { onOnboardingReopened } from './components/onboarding/show-onboarding-event'
-import {
-  shouldCloseAppModalForOnboarding,
-  shouldShowOnboarding
-} from './components/onboarding/should-show-onboarding'
+import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
 import DeleteWorktreeDialog from './components/sidebar/DeleteWorktreeDialog'
 import {
@@ -474,22 +471,6 @@ function App(): React.JSX.Element {
     const suppressTours = !onboardingLoaded || shouldShowOnboarding(onboarding)
     actions.setContextualToursOnboardingVisible(suppressTours)
   }, [actions, onboarding, onboardingLoaded])
-
-  useEffect(() => {
-    if (
-      !shouldCloseAppModalForOnboarding({
-        onboarding,
-        onboardingSettingsDetour,
-        activeModal
-      })
-    ) {
-      return
-    }
-    // Why: Radix dialogs underneath onboarding treat clicks inside onboarding
-    // as outside interactions. Onboarding owns the first-run screen, so clear
-    // app modals instead of leaving a hidden dismissable layer mounted.
-    actions.closeModal()
-  }, [actions, activeModal, onboarding, onboardingSettingsDetour])
 
   useEffect(() => {
     if (!persistedUIReady || !onboardingLoaded || contextualToursAutoEligible !== null) {
