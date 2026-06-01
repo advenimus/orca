@@ -36,6 +36,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
 import { createPtySubprocess } from './pty-subprocess'
 
 const ORCA_SHELL_WRAPPER_ENV = [
+  'CODEX_HOME',
   'ORCA_ATTRIBUTION_SHIM_DIR',
   'ORCA_OPENCODE_CONFIG_DIR',
   'ORCA_PI_CODING_AGENT_DIR',

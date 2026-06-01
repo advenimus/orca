@@ -69,13 +69,19 @@ describe('LocalPtyProvider', () => {
   }
   let exitCb: ((info: { exitCode: number }) => void) | undefined
   let origShell: string | undefined
+  let origCodexHome: string | undefined
+  let origOrcaCodexHome: string | undefined
   let origPlatform: PropertyDescriptor | undefined
 
   beforeEach(() => {
     origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     origShell = process.env.SHELL
+    origCodexHome = process.env.CODEX_HOME
+    origOrcaCodexHome = process.env.ORCA_CODEX_HOME
     process.env.SHELL = '/bin/zsh'
+    delete process.env.CODEX_HOME
+    delete process.env.ORCA_CODEX_HOME
 
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
@@ -110,6 +116,16 @@ describe('LocalPtyProvider', () => {
       delete process.env.SHELL
     } else {
       process.env.SHELL = origShell
+    }
+    if (origCodexHome === undefined) {
+      delete process.env.CODEX_HOME
+    } else {
+      process.env.CODEX_HOME = origCodexHome
+    }
+    if (origOrcaCodexHome === undefined) {
+      delete process.env.ORCA_CODEX_HOME
+    } else {
+      process.env.ORCA_CODEX_HOME = origOrcaCodexHome
     }
   })
 

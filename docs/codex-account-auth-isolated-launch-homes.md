@@ -4,9 +4,9 @@
 
 Orca stopped launching Codex from the user's global `~/.codex` because global hook and config mutations were intrusive. The current Orca-owned host runtime home is shared across accounts:
 
-- [src/main/codex-accounts/runtime-home-service.ts](../src/main/codex-accounts/runtime-home-service.ts:105) prepares launch and rate-limit homes.
-- [src/main/codex-accounts/runtime-home-service.ts](../src/main/codex-accounts/runtime-home-service.ts:146) materializes the active account by writing `auth.json` into the shared runtime home.
-- [src/main/ipc/pty.ts](../src/main/ipc/pty.ts:608) injects the selected `CODEX_HOME` into new PTYs.
+- [src/main/codex-accounts/runtime-home-service.ts](../src/main/codex-accounts/runtime-home-service.ts:119) prepares launch and rate-limit homes.
+- [src/main/codex-accounts/runtime-home-service.ts](../src/main/codex-accounts/runtime-home-service.ts:1093) materializes an active pointer for terminal launches.
+- [src/main/ipc/pty.ts](../src/main/ipc/pty.ts:608) injects the selected `CODEX_HOME` into PTYs.
 - [src/renderer/src/lib/codex-session-restart.ts](../src/renderer/src/lib/codex-session-restart.ts:24) marks only currently foreground Codex processes for restart after account switches.
 
 PR #1629 fixed stored credential clobbering by verifying identity before read-back. That prevents Account A tokens from being saved into Account B's managed account. It does not remove the live-process race where Account A can still write the shared runtime `auth.json` after the user selects Account B, and a later launch can observe Account A before Orca re-syncs.
@@ -22,7 +22,7 @@ Implementation should isolate only `auth.json` by selected account while preserv
 - Native `~/.codex` is user-owned. Orca may read/copy from it, but Orca-owned hooks and runtime config live in Orca userData.
 - `codex-runtime-home/home` is the single shared Orca Codex environment.
 - Host launch homes may contain a real selected `auth.json`. Known shared Codex entries resolve to the shared environment or are reconciled back into it before another selected launch home is prepared.
-- Account switching cannot mutate the process environment of already-open PTYs. Existing host PTYs that were opened under the old account are stale until restarted, even if no Codex process is currently foregrounded.
+- Terminal `CODEX_HOME` points at a stable active home. Account switching repoints that active home to the selected launch home so the next `codex` command in an existing shell resolves to the current account.
 
 ## Non-goals
 
@@ -62,9 +62,11 @@ Implementation should isolate only `auth.json` by selected account while preserv
 
    Read-mostly resource entries may use marker-owned copy fallback when links fail. Markers must let Orca refresh/remove only entries it created.
 
-5. Do not launch new host Codex sessions from the shared environment home.
+5. Launch terminals through a stable active home.
 
-   `prepareForCodexLaunch()` and rate-limit fetches return the selected launch home. Old sessions that already point at `codex-runtime-home/home` can continue to exist, but fresh launches no longer share their `auth.json` path. Read-back for refreshed tokens is launch-home scoped; `codex-runtime-home/home/auth.json` is ignored for deciding the active account of fresh host launches.
+   `prepareForCodexLaunch()` returns `codex-runtime-home/active/host/home`, which is an Orca-owned directory symlink/junction to the selected launch home. Account switches atomically repoint this active home. New terminals and existing idle shells therefore keep the same `CODEX_HOME` string while the next `codex` process follows the new selected account.
+
+   Rate-limit fetches continue to use the concrete selected launch home so quota reads are not coupled to a mutable pointer. Old sessions that already point at `codex-runtime-home/home` can continue to exist, but fresh launches no longer share their `auth.json` path. Read-back for refreshed tokens is launch-home scoped; `codex-runtime-home/home/auth.json` is ignored for deciding the active account of fresh host launches.
 
 6. Keep session and usage aggregation shared.
 
@@ -74,9 +76,9 @@ Implementation should isolate only `auth.json` by selected account while preserv
 
    On Windows, directory links use junctions when possible and file links may fail without Developer Mode. Mutable file fallback therefore requires reconciliation; mutable directory fallback must not silently copy. On macOS/Linux, symlinks should work. The fallback path must preserve behavior, not just tests.
 
-8. Keep WSL behavior stable in this change.
+8. Mirror the active-home contract for WSL.
 
-   Existing WSL runtime homes are already per-distro and selected by target. This change does not solve same-distro WSL multi-account stale-auth races; that remains a residual risk. Tests should prove host Windows WSL path stripping still works and host launch homes do not leak into WSL.
+   WSL launch homes remain per-distro and selected by target. Windows prepares `codex-runtime-home/active/wsl/home` inside the target distro and points it at that distro's selected launch home. WSL terminals receive the Linux path for the active home, not a Windows host path.
 
 9. Clean up launch-home credentials.
 
@@ -88,6 +90,7 @@ Implementation should isolate only `auth.json` by selected account while preserv
   - Persist selected account id in settings.
   - Read back refreshed tokens from the previous selected launch auth path only if identity matches. As a compatibility fallback, a matching old shared-home refresh may be persisted to the outgoing account, but never to the incoming account.
   - Prepare selected launch home.
+  - Repoint the active home to the selected launch home.
   - Rate-limit fetch runs against selected launch home.
 
 - New Codex terminal:
@@ -95,17 +98,18 @@ Implementation should isolate only `auth.json` by selected account while preserv
   - Host target calls `prepareForCodexLaunch()`.
   - Shared environment home is synced.
   - Selected launch home is materialized.
-  - `CODEX_HOME` and `ORCA_CODEX_HOME` point to selected launch home.
+  - Active home points to selected launch home.
+  - `CODEX_HOME` and `ORCA_CODEX_HOME` point to active home.
 
 - Old live Codex process:
-  - Continues writing whichever home it launched from.
+  - Continues writing whichever real home Codex canonicalized at startup.
   - If it was launched before this change from the shared home, the read-back guard still prevents managed-account corruption.
   - Fresh launches do not read the old process's shared `auth.json`.
 
 - Old idle shell:
-  - Keeps the `CODEX_HOME` environment it was spawned with.
-  - If the user later runs `codex` inside that shell, it can still use the old account.
-  - The UI must mark affected host terminal sessions stale or clearly limit the guarantee to fresh PTYs.
+  - Keeps the stable active-home `CODEX_HOME` environment it was spawned with.
+  - If the user later runs `codex` inside that shell, it follows the repointed active home and uses the current account.
+  - Pre-change shells that still point directly at a concrete launch home or the old shared home remain outside this guarantee.
 
 ```text
 native ~/.codex
@@ -113,6 +117,9 @@ native ~/.codex
 
 Orca/codex-runtime-home/home
   shared config.toml, hooks.json, sessions, resources
+
+Orca/codex-runtime-home/active/host/home
+  symlink/junction to the selected launch home
 
 Orca/codex-runtime-home/launch/host/account-a/home
   auth.json          real file for account A
@@ -134,12 +141,13 @@ Orca/codex-runtime-home/launch/host/account-a/home
 - A shared config/resource entry is deleted after a launch-home link or fallback copy exists.
 - Launch-home fallback copy exists but the user edited it manually.
 - Codex creates a new top-level file in a launch home that Orca does not know is shared state.
-- Daemon reattach points at an old PTY with old `CODEX_HOME`.
-- Idle shell opened as Account A later runs Codex after switching to Account B.
+- Daemon reattach points at a pre-change PTY with a concrete old `CODEX_HOME`.
+- Pre-change idle shell opened as Account A later runs Codex after switching to Account B.
 - WSL shell launched from Windows must not receive a host launch-home path.
 - macOS/Linux symlinks must use relative/absolute targets without Windows junction behavior.
 - Codex atomically rewrites `config.toml` over a launch-home symlink or fallback copy.
 - Account removal leaves copied launch-home credentials behind.
+- Active-home symlink/junction replacement fails and Orca falls back to a concrete selected launch home for that launch.
 
 ## Test Plan
 
@@ -154,9 +162,11 @@ Orca/codex-runtime-home/launch/host/account-a/home
 - Unit: account removal deletes the marked account launch home auth.
 - Unit: removing an account that never launched does not create a new empty launch-home directory.
 - Unit: WSL target behavior and Windows WSL path stripping remain unchanged.
+- Unit: host and WSL `prepareForCodexLaunch()` return active homes whose links target the selected launch homes.
+- Manual: existing shell with stable `CODEX_HOME` starts a new Codex process against the newly selected account after active-home repoint.
 - Typecheck: `pnpm run tc:node`, `pnpm run tc:cli`, `pnpm run tc:web`.
 - Lint: `pnpm run lint`.
-- Electron validation: launch Orca dev on Windows, create fake managed Codex account state through IPC/store where possible, create a terminal, verify visible terminal exists, and verify backing PTY env/session points at a selected launch home. Capture account settings/status bar and terminal screenshots. On macOS, validate through CI/subagent or targeted path/link tests where local hardware is unavailable.
+- Electron validation: launch Orca dev on Windows, create fake managed Codex account state through IPC/store where possible, create a terminal, verify visible terminal exists, and verify backing PTY env/session points at an active home that targets the selected launch home. Capture account settings/status bar and terminal screenshots. On macOS, validate through CI/subagent or targeted path/link tests where local hardware is unavailable.
 
 ## UI Quality Bar
 
@@ -172,7 +182,7 @@ No intentional UI change. Existing account switcher and terminal restart prompt 
 
 1. Add path helpers for shared environment home and selected host launch homes.
 2. Add launch-home materialization with link/copy fallback and owned markers.
-3. Route host `prepareForCodexLaunch()` and `prepareForRateLimitFetch()` to selected launch homes.
+3. Route host `prepareForCodexLaunch()` through active homes and keep `prepareForRateLimitFetch()` on selected launch homes.
 4. Keep existing read-back guard but make it read from the relevant selected launch auth path when possible.
 5. Add regression tests for stale auth, shared non-auth entries, fallback copies, and WSL no-regression.
 6. Fix the current CLI typecheck include for `codex-config-sync-state.ts`.
@@ -202,7 +212,7 @@ No intentional UI change. Existing account switcher and terminal restart prompt 
   3. Terminal after selected-account launch
 - Residual risks:
   - A pre-change live Codex process launched from the old shared home can still mutate the old shared `auth.json`; fresh launches should no longer consume it.
-  - A pre-switch idle shell cannot have its process environment changed; it must be restarted or marked stale.
-  - Same-distro WSL launch homes remain out of scope for this host-focused change.
+  - A pre-change idle shell that already has a concrete old `CODEX_HOME` cannot be repaired by repointing the active home.
+  - Windows junction replacement semantics still need native Windows validation; failure falls back to concrete launch homes, preserving correctness but losing hot-swap for that launch.
   - Unknown Codex-created top-level launch-home files are not adopted into shared state until Orca explicitly classifies them. This avoids crashing or copying locked live sqlite files, but it means "everything except auth" is guaranteed only for the known shared entries above.
   - If Codex stores account-sensitive data outside `auth.json`, sharing sessions/state may need a later narrower exception.

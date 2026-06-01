@@ -26,8 +26,10 @@ import {
 import {
   ensureOrcaCodexLaunchHome,
   ensureScopedCodexLaunchHome,
+  materializeOrcaCodexActiveHome,
   materializeOrcaCodexLaunchHome,
   materializeScopedCodexLaunchHome,
+  pointActiveCodexHomeAtLaunchHome,
   removeOrcaCodexLaunchHome,
   removeScopedCodexLaunchHome
 } from '../codex/codex-launch-home-paths'
@@ -97,6 +99,7 @@ export class CodexRuntimeHomeService {
     this.safeMigrateLegacyManagedState()
     this.initializeLastSyncedState()
     this.safeSyncForCurrentSelection()
+    this.safeRefreshCurrentHostActiveHome()
   }
 
   private initializeLastSyncedState(): void {
@@ -116,16 +119,16 @@ export class CodexRuntimeHomeService {
   prepareForCodexLaunch(target?: CodexAccountSelectionTarget): string | null {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
-      return (
+      const launchHomePath =
         this.syncWslRuntimeForCurrentSelection(wslTarget) ??
         this.getWslSystemCodexHomePath(wslTarget)
-      )
+      return this.pointWslActiveHomeForLaunch(wslTarget, launchHomePath)
     }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
     syncSystemCodexSessionsIntoManagedHome()
-    return this.materializeCurrentHostLaunchHome()
+    return this.materializeCurrentHostActiveHome()
   }
 
   private getWslSystemCodexHomePath(target: CodexAccountSelectionTarget): string | null {
@@ -154,13 +157,27 @@ export class CodexRuntimeHomeService {
     return this.materializeCurrentHostLaunchHome()
   }
 
-  refreshCurrentHostLaunchHome(): string | null {
+  refreshCurrentHostActiveHome(): string | null {
     try {
-      return this.materializeCurrentHostLaunchHome()
+      syncSystemCodexResourcesIntoManagedHome()
+      syncSystemConfigIntoManagedCodexHome()
+      syncSystemCodexSessionsIntoManagedHome()
+      return this.materializeCurrentHostActiveHome()
     } catch (error) {
       console.warn('[codex-runtime-home] Failed to refresh host launch home:', error)
       return null
     }
+  }
+
+  refreshCurrentLaunchHome(target?: CodexAccountSelectionTarget): string | null {
+    if (target?.runtime === 'wsl') {
+      const wslTarget = this.resolveWslDefaultTarget(target)
+      const launchHomePath =
+        this.syncWslRuntimeForCurrentSelection(wslTarget) ??
+        this.getWslSystemCodexHomePath(wslTarget)
+      return this.pointWslActiveHomeForLaunch(wslTarget, launchHomePath)
+    }
+    return this.refreshCurrentHostActiveHome()
   }
 
   syncForCurrentSelection(target?: CodexAccountSelectionTarget): void {
@@ -453,6 +470,14 @@ export class CodexRuntimeHomeService {
       this.syncForCurrentSelection()
     } catch (error) {
       console.warn('[codex-runtime-home] Failed to sync runtime auth state:', error)
+    }
+  }
+
+  private safeRefreshCurrentHostActiveHome(): void {
+    try {
+      this.refreshCurrentHostActiveHome()
+    } catch (error) {
+      console.warn('[codex-runtime-home] Failed to refresh active host Codex home:', error)
     }
   }
 
@@ -1063,6 +1088,35 @@ export class CodexRuntimeHomeService {
       console.warn('[codex-runtime-home] Failed to trust host launch-home hooks:', error)
     }
     return launchHomePath
+  }
+
+  private materializeCurrentHostActiveHome(): string {
+    const launchHomePath = this.materializeCurrentHostLaunchHome()
+    // Why: terminals keep CODEX_HOME for their lifetime. Pointing that stable
+    // path at the selected launch home restores hot-swap for the next `codex`.
+    return materializeOrcaCodexActiveHome(launchHomePath)
+  }
+
+  private pointWslActiveHomeAtLaunchHome(runtimeHomePath: string, launchHomePath: string): string {
+    const activeHomePath = this.joinWslPath(dirname(runtimeHomePath), 'active', 'wsl', 'home')
+    return pointActiveCodexHomeAtLaunchHome(activeHomePath, launchHomePath)
+  }
+
+  private pointWslActiveHomeForLaunch(
+    target: CodexAccountSelectionTarget,
+    launchHomePath: string | null
+  ): string | null {
+    if (!launchHomePath || process.platform !== 'win32') {
+      return launchHomePath
+    }
+    const distro = target.wslDistro?.trim() || getDefaultWslDistro()
+    if (!distro) {
+      return launchHomePath
+    }
+    const runtimeHomePath = this.getWslRuntimeHomePath(distro)
+    return runtimeHomePath
+      ? this.pointWslActiveHomeAtLaunchHome(runtimeHomePath, launchHomePath)
+      : launchHomePath
   }
 
   private getHostLaunchSelectionKey(accountId: string | null): string {

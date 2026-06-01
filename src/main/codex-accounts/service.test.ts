@@ -166,6 +166,7 @@ function createRateLimits() {
 function createRuntimeHome() {
   return {
     syncForCurrentSelection: vi.fn(),
+    refreshCurrentLaunchHome: vi.fn(() => null),
     clearLastWrittenAuthJson: vi.fn()
   }
 }

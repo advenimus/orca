@@ -2710,7 +2710,7 @@ describe('registerPtyHandlers', () => {
       expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
     })
 
-    it('converts selected WSL Codex homes to Linux paths for wsl.exe shells', () => {
+    it('converts selected WSL active Codex homes to Linux paths for wsl.exe shells', () => {
       const originalPlatform = process.platform
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -2724,7 +2724,7 @@ describe('registerPtyHandlers', () => {
           mainWindow as never,
           undefined,
           () =>
-            '\\\\wsl.localhost\\Ubuntu\\home\\test\\.local\\share\\orca\\codex-runtime-home\\launch\\wsl\\system\\home',
+            '\\\\wsl.localhost\\Ubuntu\\home\\test\\.local\\share\\orca\\codex-runtime-home\\active\\wsl\\home',
           () =>
             ({
               terminalWindowsShell: 'powershell.exe',
@@ -2739,10 +2739,10 @@ describe('registerPtyHandlers', () => {
 
         const spawnOptions = spawnMock.mock.calls.at(-1)?.[2] as { env: Record<string, string> }
         expect(spawnOptions.env.CODEX_HOME).toBe(
-          '/home/test/.local/share/orca/codex-runtime-home/launch/wsl/system/home'
+          '/home/test/.local/share/orca/codex-runtime-home/active/wsl/home'
         )
         expect(spawnOptions.env.ORCA_CODEX_HOME).toBe(
-          '/home/test/.local/share/orca/codex-runtime-home/launch/wsl/system/home'
+          '/home/test/.local/share/orca/codex-runtime-home/active/wsl/home'
         )
         expect(spawnOptions.env.WSLENV).toContain('CODEX_HOME')
         expect(spawnOptions.env.WSLENV).toContain('ORCA_CODEX_HOME')

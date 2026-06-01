@@ -9,6 +9,7 @@ import {
   readFileSync,
   readlinkSync,
   readdirSync,
+  renameSync,
   rmdirSync,
   rmSync,
   statSync,
@@ -74,6 +75,70 @@ export function removeOrcaCodexLaunchHome(accountId: string): void {
     getOrcaCodexLaunchHostRootPathWithOptions({ create: false }),
     accountId
   )
+}
+
+export function materializeOrcaCodexActiveHome(launchHomePath: string): string {
+  return pointActiveCodexHomeAtLaunchHome(getOrcaCodexActiveHostHomePath(), launchHomePath)
+}
+
+export function pointActiveCodexHomeAtLaunchHome(
+  activeHomePath: string,
+  launchHomePath: string
+): string {
+  if (pointWslActiveCodexHomeAtLaunchHome(activeHomePath, launchHomePath)) {
+    return activeHomePath
+  }
+  mkdirSync(dirname(activeHomePath), { recursive: true })
+  if (activeHomeAlreadyPointsToLaunchHome(activeHomePath, launchHomePath)) {
+    return activeHomePath
+  }
+
+  const nextLinkPath = `${activeHomePath}.next-${process.pid}-${Date.now()}`
+  removeActiveHomeLinkIfOwned(nextLinkPath)
+  try {
+    createSharedEntryLink(launchHomePath, nextLinkPath)
+    replaceActiveHomeLink(activeHomePath, nextLinkPath)
+    return activeHomePath
+  } catch (error) {
+    removeActiveHomeLinkIfOwned(nextLinkPath)
+    console.warn('[codex-home] Failed to point active Codex home at launch home:', error)
+    return launchHomePath
+  }
+}
+
+function pointWslActiveCodexHomeAtLaunchHome(
+  activeHomePath: string,
+  launchHomePath: string
+): boolean {
+  const paths = getSameDistroWslPaths(launchHomePath, activeHomePath)
+  if (!paths) {
+    return false
+  }
+  const nextLinuxPath = `${paths.targetLinuxPath}.next-${process.pid}-${Date.now()}`
+  try {
+    execFileSync(
+      'wsl.exe',
+      [
+        '-d',
+        paths.distro,
+        '--',
+        'bash',
+        '-lc',
+        'mkdir -p "$(dirname "$2")" && rm -f -- "$3" && ln -s -- "$1" "$3" && mv -Tf -- "$3" "$2"',
+        'sh',
+        paths.sourceLinuxPath,
+        paths.targetLinuxPath,
+        nextLinuxPath
+      ],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 5000
+      }
+    )
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function getScopedCodexLaunchHomePath(
@@ -148,6 +213,10 @@ function getOrcaCodexLaunchHostRootPathWithOptions(options: { create: boolean })
     mkdirSync(rootPath, { recursive: true })
   }
   return rootPath
+}
+
+function getOrcaCodexActiveHostHomePath(): string {
+  return join(dirname(getOrcaManagedCodexHomePath()), 'active', 'host', 'home')
 }
 
 function resolveCodexLaunchHomePath(launchRootPath: string, accountId: string | null): string {
@@ -345,6 +414,62 @@ function removeWslPathIfPossible(targetPath: string): boolean {
     return false
   }
   return runWslPathCommand(targetWsl.distro, ['rm', '-rf', '--', targetWsl.linuxPath])
+}
+
+function activeHomeAlreadyPointsToLaunchHome(
+  activeHomePath: string,
+  launchHomePath: string
+): boolean {
+  if (targetAlreadyPointsToSource(activeHomePath, launchHomePath)) {
+    return true
+  }
+  return false
+}
+
+function replaceActiveHomeLink(activeHomePath: string, nextLinkPath: string): void {
+  try {
+    renameSync(nextLinkPath, activeHomePath)
+  } catch (error) {
+    if (!activeHomeLinkIsReplaceable(activeHomePath)) {
+      throw error
+    }
+    removeActiveHomeLinkIfOwned(activeHomePath)
+    renameSync(nextLinkPath, activeHomePath)
+  }
+}
+
+function activeHomeLinkIsReplaceable(activeHomePath: string): boolean {
+  try {
+    const stat = lstatSync(activeHomePath)
+    return stat.isSymbolicLink() || isWindowsReadableLink(activeHomePath)
+  } catch {
+    return true
+  }
+}
+
+function removeActiveHomeLinkIfOwned(activeHomePath: string): void {
+  try {
+    const stat = lstatSync(activeHomePath)
+    if (stat.isSymbolicLink()) {
+      unlinkSync(activeHomePath)
+    } else if (isWindowsReadableLink(activeHomePath)) {
+      rmdirSync(activeHomePath)
+    }
+  } catch {
+    // Missing or inaccessible temporary links are handled by the caller.
+  }
+}
+
+function isWindowsReadableLink(targetPath: string): boolean {
+  if (process.platform !== 'win32') {
+    return false
+  }
+  try {
+    readlinkSync(targetPath)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function readWslSymlinkTarget(targetPath: string): string | null {
@@ -648,10 +773,11 @@ function targetAlreadyPointsToSource(targetPath: string, sourcePath: string): bo
     return readWslSymlinkTarget(targetPath) === paths.sourceLinuxPath
   }
   try {
-    return (
-      lstatSync(targetPath).isSymbolicLink() &&
-      linkTargetsMatch(readlinkSync(targetPath), sourcePath)
-    )
+    const stat = lstatSync(targetPath)
+    if (stat.isSymbolicLink()) {
+      return linkTargetsMatch(readlinkSync(targetPath), sourcePath)
+    }
+    return process.platform === 'win32' && linkTargetsMatch(readlinkSync(targetPath), sourcePath)
   } catch {
     return false
   }
