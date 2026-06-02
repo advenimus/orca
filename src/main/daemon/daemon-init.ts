@@ -599,25 +599,48 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
     if (!(await probeSocket(socketPath))) {
       continue
     }
-    // Why: old daemon PTYs can be running long-lived agents during an app
-    // upgrade. Keep those sessions routed to their original daemon while new
-    // terminals use the current protocol, instead of killing background work.
-    // Legacy adapters intentionally do not respawn: respawning an old protocol
-    // daemon from new code would recreate stale env semantics and can be less
-    // predictable than letting the session fail if that old daemon dies.
     // Why historyPath is still passed: checkpoint writes will fail silently
     // (pre-v4 daemons don't support getSnapshot), but the HistoryManager is
     // still needed for cleanup — close/exit events must remove history dirs
     // and mark meta.json as ended. Without it, a later v4 session reusing
     // the same ID could false-restore stale scrollback.bin.
-    adapters.push(
-      new DaemonPtyAdapter({
-        socketPath,
-        tokenPath,
-        protocolVersion,
-        historyPath: getHistoryDir()
-      })
-    )
+    const legacyAdapter = new DaemonPtyAdapter({
+      socketPath,
+      tokenPath,
+      protocolVersion,
+      historyPath: getHistoryDir()
+    })
+    let liveSessionCount: number | null = null
+    try {
+      liveSessionCount = (await legacyAdapter.listSessions()).length
+    } catch (error) {
+      console.warn(
+        `[daemon] Preserving legacy daemon v${protocolVersion} because live session state could not be verified`,
+        error
+      )
+      adapters.push(legacyAdapter)
+      continue
+    }
+    if (liveSessionCount > 0) {
+      // Why: old daemon PTYs can be running long-lived agents during an app
+      // upgrade. Keep those sessions routed to their original daemon while new
+      // terminals use the current protocol, instead of killing background work.
+      // Legacy adapters intentionally do not respawn: respawning an old protocol
+      // daemon from new code would recreate stale env semantics and can be less
+      // predictable than letting the session fail if that old daemon dies.
+      console.warn(
+        `[daemon] Preserving legacy daemon v${protocolVersion} because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+      )
+      adapters.push(legacyAdapter)
+      continue
+    }
+    console.warn(`[daemon] Cleaning up empty legacy daemon v${protocolVersion}`)
+    try {
+      await legacyAdapter.disconnectOnly()
+    } catch (error) {
+      console.warn(`[daemon] Failed to disconnect legacy daemon v${protocolVersion} adapter`, error)
+    }
+    await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
   }
   return adapters
 }

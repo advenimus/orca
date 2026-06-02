@@ -27,8 +27,11 @@ const {
   killStaleDaemonMock,
   getProcessStartedAtMsMock,
   daemonClientMock,
+  daemonClientInstances,
   spawnerInstances,
   adapterInstances,
+  adapterListSessionsByProtocolVersion,
+  adapterListSessionsErrorsByProtocolVersion,
   setLocalPtyProviderMock,
   unbindLocalProviderListenersMock,
   rebindLocalProviderListenersMock
@@ -72,12 +75,15 @@ const {
   const killStaleDaemonMock = vi.fn(async () => true)
   const getProcessStartedAtMsMock = vi.fn(() => 1_000_000)
 
+  const daemonClientInstances: MockDaemonClient[] = []
   const daemonClientMock = vi.fn().mockImplementation(function MockDaemonClient() {
-    return {
+    const instance = {
       ensureConnected: vi.fn(async () => {}),
       request: vi.fn(async () => ({ sessions: [] })),
       disconnect: vi.fn()
     }
+    daemonClientInstances.push(instance)
+    return instance
   })
 
   // Why: every DaemonSpawner constructed under test pushes into this array so
@@ -86,6 +92,11 @@ const {
   // Same for DaemonPtyAdapter. The test asserts the replacement adapter is a
   // fresh instance whose respawn closure targets the *original* spawner.
   const adapterInstances: MockAdapter[] = []
+  const adapterListSessionsByProtocolVersion = new Map<
+    number,
+    { sessionId: string; isAlive: boolean }[]
+  >()
+  const adapterListSessionsErrorsByProtocolVersion = new Map<number, Error>()
 
   const setLocalPtyProviderMock = vi.fn()
   const unbindLocalProviderListenersMock = vi.fn()
@@ -106,8 +117,11 @@ const {
     killStaleDaemonMock,
     getProcessStartedAtMsMock,
     daemonClientMock,
+    daemonClientInstances,
     spawnerInstances,
     adapterInstances,
+    adapterListSessionsByProtocolVersion,
+    adapterListSessionsErrorsByProtocolVersion,
     setLocalPtyProviderMock,
     unbindLocalProviderListenersMock,
     rebindLocalProviderListenersMock
@@ -144,6 +158,12 @@ type MockAdapter = {
   // on each adapter; our stub returns a no-op unsubscribe so the router can
   // subscribe without exploding.
   callOrder: string[]
+}
+
+type MockDaemonClient = {
+  ensureConnected: ReturnType<typeof vi.fn>
+  request: ReturnType<typeof vi.fn>
+  disconnect: ReturnType<typeof vi.fn>
 }
 
 vi.mock('electron', () => ({
@@ -235,8 +255,22 @@ vi.mock('./daemon-pty-adapter', () => ({
       this.fanoutSyntheticExits = vi.fn(() => {
         this.callOrder.push('fanoutSyntheticExits')
       })
-      this.listProcesses = vi.fn(async () => [])
-      this.listSessions = vi.fn(async () => [])
+      this.listProcesses = vi.fn(async () =>
+        (adapterListSessionsByProtocolVersion.get(this.protocolVersion) ?? [])
+          .filter((session) => session.isAlive)
+          .map((session) => ({
+            id: session.sessionId,
+            cwd: '',
+            title: 'shell'
+          }))
+      )
+      this.listSessions = vi.fn(async () => {
+        const error = adapterListSessionsErrorsByProtocolVersion.get(this.protocolVersion)
+        if (error) {
+          throw error
+        }
+        return adapterListSessionsByProtocolVersion.get(this.protocolVersion) ?? []
+      })
       this.shutdown = vi.fn(async () => {})
       this.dispose = vi.fn()
       this.disconnectOnly = vi.fn(async () => {})
@@ -257,6 +291,9 @@ async function importFresh() {
   vi.resetModules()
   spawnerInstances.length = 0
   adapterInstances.length = 0
+  daemonClientInstances.length = 0
+  adapterListSessionsByProtocolVersion.clear()
+  adapterListSessionsErrorsByProtocolVersion.clear()
   setLocalPtyProviderMock.mockClear()
   unbindLocalProviderListenersMock.mockClear()
   rebindLocalProviderListenersMock.mockClear()
@@ -280,6 +317,29 @@ async function importFresh() {
   // the only way to reliably exercise the "first-time init" path and the
   // coalescer independently.
   return import('./daemon-init')
+}
+
+function mockLegacySocketAlive(protocolVersion: number): void {
+  probeSocketExistsMock.mockImplementation(
+    (p?: string) => p?.endsWith(`daemon-v${protocolVersion}.sock`) ?? false
+  )
+  netConnectMock.mockImplementation(() => {
+    const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+    return {
+      on(event: string, cb: () => void) {
+        handlers[event]?.push(cb)
+        if (event === 'connect') {
+          queueMicrotask(() => cb())
+        }
+        return this
+      },
+      removeListener(event: string, cb: () => void) {
+        handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+        return this
+      },
+      destroy() {}
+    }
+  })
 }
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
@@ -454,30 +514,63 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
   it('routes affected v9 daemon sessions through a legacy adapter on launch', async () => {
     const mod = await importFresh()
-    probeSocketExistsMock.mockImplementation((p?: string) => p?.endsWith('daemon-v9.sock') ?? false)
-    netConnectMock.mockImplementation(() => {
-      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
-      return {
-        on(event: string, cb: () => void) {
-          handlers[event]?.push(cb)
-          if (event === 'connect') {
-            queueMicrotask(() => cb())
-          }
-          return this
-        },
-        removeListener(event: string, cb: () => void) {
-          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
-          return this
-        },
-        destroy() {}
-      }
-    })
+    mockLegacySocketAlive(9)
+    adapterListSessionsByProtocolVersion.set(9, [{ sessionId: 'legacy-wt@@live', isAlive: true }])
 
     await mod.initDaemonPtyProvider()
 
     const { DaemonPtyRouter } = await import('./daemon-pty-router')
     expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyRouter)
-    expect(adapterInstances.some((instance) => instance.protocolVersion === 9)).toBe(true)
+    const legacyAdapter = adapterInstances.find((instance) => instance.protocolVersion === 9)
+    expect(legacyAdapter).toBeDefined()
+    expect(legacyAdapter?.listSessions).toHaveBeenCalledOnce()
+    expect(legacyAdapter?.listProcesses).toHaveBeenCalledOnce()
+    expect(legacyAdapter?.disconnectOnly).not.toHaveBeenCalled()
+  })
+
+  it('cleans up an empty legacy daemon instead of preserving a router', async () => {
+    const mod = await importFresh()
+    mockLegacySocketAlive(9)
+
+    await mod.initDaemonPtyProvider()
+
+    const { DaemonPtyAdapter } = await import('./daemon-pty-adapter')
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
+    expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyAdapter)
+    expect(mod.getDaemonProvider()).not.toBeInstanceOf(DaemonPtyRouter)
+
+    const legacyAdapter = adapterInstances.find((instance) => instance.protocolVersion === 9)
+    expect(legacyAdapter).toBeDefined()
+    expect(legacyAdapter?.listSessions).toHaveBeenCalledOnce()
+    expect(legacyAdapter?.disconnectOnly).toHaveBeenCalledOnce()
+
+    const shutdownClient = daemonClientInstances.find((instance) =>
+      instance.request.mock.calls.some(([method]) => method === 'shutdown')
+    )
+    expect(shutdownClient).toBeDefined()
+    expect(shutdownClient?.request).toHaveBeenCalledWith('shutdown', { killSessions: true })
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves a legacy daemon when live session state cannot be verified', async () => {
+    const mod = await importFresh()
+    mockLegacySocketAlive(9)
+    adapterListSessionsErrorsByProtocolVersion.set(9, new Error('listSessions failed'))
+
+    await mod.initDaemonPtyProvider()
+
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
+    expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyRouter)
+
+    const legacyAdapter = adapterInstances.find((instance) => instance.protocolVersion === 9)
+    expect(legacyAdapter).toBeDefined()
+    expect(legacyAdapter?.listSessions).toHaveBeenCalledOnce()
+    expect(legacyAdapter?.disconnectOnly).not.toHaveBeenCalled()
+    expect(
+      daemonClientInstances.some((instance) =>
+        instance.request.mock.calls.some(([method]) => method === 'shutdown')
+      )
+    ).toBe(false)
   })
 
   it('restart path with no legacy adapters yields a bare DaemonPtyAdapter (not wrapped in a router)', async () => {
