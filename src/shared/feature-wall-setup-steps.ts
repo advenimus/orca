@@ -70,8 +70,8 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
   },
   {
     id: 'agent-capabilities',
-    name: 'Unlock agent actions',
-    subtitle: 'Unlock agent actions',
+    name: 'Enable Orca CLI',
+    subtitle: 'Enable Orca CLI',
     description:
       'Let agents use the browser, computer, and orchestration tools when a task needs it.'
   }
