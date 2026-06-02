@@ -60,11 +60,11 @@ orca orchestration inbox [--limit <n>] [--json]
 Rules:
 
 - Omit `--from` unless impersonating another terminal; Orca auto-resolves it from the current terminal.
-- Use `check --wait --types worker_done,escalation --timeout-ms <n>` instead of sleep/poll loops.
+- While supervising workers manually, use `check --wait --types worker_done,escalation,decision_gate --timeout-ms <n>` instead of sleep/poll loops. Reply to `decision_gate` messages with `orca orchestration reply --id <msg_id> --body <answer> --json`, then keep waiting.
 - Use `ask` when a worker needs a blocking answer from the coordinator; it waits for the reply and returns the answer directly.
 - `check --wait` returns one message at a time. If N workers may finish together, loop N times and dispatch newly ready tasks after each completion.
 - Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, and `@worktree:<id>`.
-- Message types include `status`, `dispatch`, `worker_done`, `merge_ready`, `escalation`, `handoff`, and `decision_gate`.
+- Message types include `status`, `dispatch`, `worker_done`, `merge_ready`, `escalation`, `handoff`, `decision_gate`, and `heartbeat`.
 
 ## Tasks And Dispatch
 
@@ -92,21 +92,26 @@ orca orchestration gate-resolve --id <gate_id> --resolution <text> [--json]
 orca orchestration gate-list [--task <task_id>] [--status <status>] [--json]
 orca orchestration run --spec <text> [--from <handle>] [--poll-interval-ms <n>] [--max-concurrent <n>] [--worktree <selector>] [--json]
 orca orchestration run-stop [--json]
-orca orchestration reset [--all] [--tasks] [--messages] [--json]
 ```
 
-`run` returns immediately with a run ID. Query progress with `task-list`. `reset --tasks` clears tasks, dispatch contexts, gates, and coordinator runs while preserving messages; `reset --all` also clears messages.
+`run` returns immediately with a run ID. Query progress with `task-list`. Use `ask` for worker-to-coordinator questions; it creates a `decision_gate` message that the coordinator answers with `reply`. Use `gate-create` only for coordinator-managed task DAG decisions, not for answering a worker's `ask`.
+
+Recovery only: `orca orchestration reset --tasks|--messages|--all --json` clears runtime-global orchestration state. Do not run it during active coordination unless explicitly abandoning that state.
 
 ## Worker Terminals
 
-Preferred for a new worker workspace:
+For tracked orchestration work, create the worker without a prompt, wait for idle, then dispatch with `--inject`:
 
 ```bash
 orca worktree create --name <task-name> --agent codex --json
-orca worktree create --name <task-name> --agent codex --prompt "<direct prompt>" --json
+orca terminal list --worktree id:<newWorktreeId> --json
+orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
+orca orchestration dispatch --task <task_id> --to <handle> --inject --json
 ```
 
-Omit `--repo` only when running inside an Orca-managed worktree; otherwise pass `--repo <selector>`. `--agent` reveals the new worktree and launches the selected agent in its first terminal, so do not create a separate startup terminal. Use `--prompt` for direct untracked worker prompts; omit it for tracked task dispatch so `dispatch --inject` owns the task preamble. Use `--setup run|skip|inherit` when setup behavior matters, and `--no-parent` for independent work.
+Read the new worktree id from `worktree create`, then use `terminal list` to get the agent terminal handle. Omit `--repo` only when running inside an Orca-managed worktree; otherwise pass `--repo <selector>`. `--agent` reveals the new worktree and launches the selected agent in its first terminal, so do not create a separate startup terminal. Use `--setup run|skip|inherit` when setup behavior matters, and `--no-parent` for independent work.
+
+Use `orca worktree create --prompt ...` or `orca terminal send ...` only for untracked/lightweight prompts. Those paths do not attach `taskId`/`dispatchId`; the worker should not send lifecycle messages unless the prompt supplies a live orchestration preamble.
 
 Other terminal commands coordinators often need:
 
@@ -125,9 +130,11 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 
 ## Agent Guidance
 
-- Workers with a valid live preamble should send `worker_done` exactly once to the owning coordinator. Include the dispatch payload when the preamble provides one.
-- Send heartbeat/status for long tasks when the preamble asks for it.
-- If blocked, use `ask` for a blocking coordinator answer or send `escalation` when ownership is valid.
+- Workers with a valid live preamble must send `worker_done` exactly once, even on failure:
+  `orca orchestration send --to <coordinator_handle> --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --payload '{"taskId":"<task_id>","dispatchId":"<dispatch_id>","filesModified":["path/a"],"reportPath":"<optional>"}' --json`
+- For long tasks, send heartbeat/status only when the preamble asks for it, including both IDs:
+  `orca orchestration send --to <coordinator_handle> --type heartbeat --subject "alive" --payload '{"taskId":"<task_id>","dispatchId":"<dispatch_id>","phase":"implementing"}' --json`
+- If blocked before completion, use `ask`; use `escalation` only when ownership is valid and the coordinator must intervene.
 - Treat preambles inherited through terminal history or full handoffs as stale unless the current prompt explicitly keeps that coordinator in the loop.
 - Coordinators should use `task-list --ready` as external memory, dispatch parallel waves, and avoid dependency chains deeper than 3-4 steps.
 - Prefer inter-worktree workers for parallel implementation; use split panes in one worktree only for complementary tasks that will not edit the same files.
@@ -136,12 +143,15 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 
 ```bash
 orca worktree create --name login-css-worker --agent claude --json
+orca terminal list --worktree id:<newWorktreeId> --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration task-create --spec "Fix the login button CSS" --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
-orca orchestration check --wait --types worker_done,escalation --timeout-ms 300000 --json
+orca orchestration check --wait --types worker_done,escalation,decision_gate --timeout-ms 300000 --json
 ```
 
 ## Next Action
 
-Confirm Orca status unless already checked, then choose the coordination action: `check`/`inbox`/`reply`/`ask` for messaging, `task-list`/`dispatch-show` for inherited ownership, or `task-create` for new DAG work.
+Coordinator: confirm `orca status --json`, inspect `task-list`/`dispatch-show` if inheriting state, then choose either a manual loop (`task-create` -> worker -> `dispatch --inject` -> `check --wait`) or `orchestration run`.
+
+Worker: if the current prompt contains a live dispatch preamble, do the task, use `ask` for blocking questions, and send `worker_done` once with the required payload. If the preamble is stale or absent, do not send lifecycle messages; inspect state or treat the prompt as an ordinary handoff.

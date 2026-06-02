@@ -36,6 +36,19 @@ orca status --json
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
+## Remote Runtimes / SSH
+
+Use a saved environment or pairing code when the target Orca runtime is remote, paired, or SSH-backed:
+
+```bash
+orca environment list --json
+orca environment add --name <name> --pairing-code <code> --json
+orca status --environment <name> --json
+orca worktree ps --environment <name> --json
+```
+
+`--environment <selector>`, `--pairing-code <code>`, `ORCA_ENVIRONMENT`, and `ORCA_PAIRING_CODE` target a non-local runtime. Do not assume the local app/runtime is right for SSH or paired-client tasks.
+
 ## Worktrees
 
 Common commands:
@@ -84,6 +97,7 @@ orca worktree create --name task --run-hooks --json
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
 - `--agent`, `--activate`, and `--run-hooks` reveal the new worktree. Plain create stays in the background.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior. Do not manually create extra setup terminals.
+- If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "codex"` and `orca terminal send` if a prompt is needed.
 
 ## Worktree Comments
 
@@ -124,8 +138,8 @@ Terminal rules:
 
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
-- `terminal send` is valid for ordinary terminal input and lightweight prompts to agent terminals when orchestration state is unnecessary.
-- Use `orchestration` for structured agent-to-agent messaging, handoffs, task DAGs, dispatch, inbox/reply flows, or coordinator loops.
+- Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
+- For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops.
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, and Codex; always pass `--timeout-ms`.
 - Terminal handles are runtime-scoped. If Orca restarts or returns `terminal_handle_stale`, reacquire with `terminal list`.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
@@ -151,7 +165,7 @@ Use `--repo <selector>` for a new worktree per run, or `--workspace <selector>` 
 
 ## Built-In Browser
 
-These commands control only the browser embedded inside the Orca app. External app/browser UI, including Orca app chrome or settings, uses Computer Use.
+These commands control only Orca's embedded browser tabs. For external Chrome/Safari/webviews or Orca app chrome/settings, use the Computer Use skill/tool. If the user explicitly asks for Orca CLI desktop control, use `orca computer ...`; do not use browser commands for desktop UI.
 
 Use a snapshot-interact-re-snapshot loop:
 
@@ -207,7 +221,7 @@ Browser rules:
 - Use typed tab commands (`orca tab list/create/close/switch`), not `orca exec --command "tab ..."`, so Orca keeps UI state synchronized.
 - Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts.
 - Less common workflows can use typed commands above or `orca exec --command "<agent-browser command>"` passthrough.
-- If `fill` or `type` fails on a custom input, try `orca focus --element @e1 --json` then `orca exec --command "keyboard inserttext \"text\"" --json`.
+- If `fill` or `type` fails on a custom input, try `orca focus --element @e1 --json` then `orca inserttext --text "text" --json`.
 
 Common recoveries:
 
