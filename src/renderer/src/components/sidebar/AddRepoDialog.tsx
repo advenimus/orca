@@ -34,6 +34,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
 
   const [step, setStep] = useState<AddRepoDialogStep>('add')
   const [isAdding, setIsAdding] = useState(false)
@@ -181,6 +183,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const droppedLocalPath =
     typeof modalData.droppedLocalPath === 'string' ? modalData.droppedLocalPath : ''
   const isRuntimeEnvironmentActive = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+  // Why: repo_added telemetry cannot reliably separate SSH from local folder adds,
+  // so promote remote projects from durable local SSH state instead.
+  const isSshLikely =
+    repos.some((repo) => Boolean(repo.connectionId)) ||
+    sshTargetLabels.size > 0 ||
+    Array.from(sshConnectionStates.values()).some((state) => state.status === 'connected')
 
   const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
     isOpen,
@@ -293,6 +301,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         <AddRepoDialogStepContent
           step={step}
           isRuntimeEnvironmentActive={isRuntimeEnvironmentActive}
+          isSshLikely={isSshLikely}
           repoCount={repos.length}
           isAdding={isAdding}
           addProjectBusyLabel={addProjectBusyLabel}

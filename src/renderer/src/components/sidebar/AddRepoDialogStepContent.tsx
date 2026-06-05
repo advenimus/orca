@@ -11,6 +11,7 @@ import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types
 type AddRepoDialogStepContentProps = {
   step: AddRepoDialogStep
   isRuntimeEnvironmentActive: boolean
+  isSshLikely: boolean
   repoCount: number
   isAdding: boolean
   addProjectBusyLabel: string | null
@@ -67,6 +68,7 @@ type AddRepoDialogStepContentProps = {
 export function AddRepoDialogStepContent({
   step,
   isRuntimeEnvironmentActive,
+  isSshLikely,
   repoCount,
   isAdding,
   addProjectBusyLabel,
@@ -137,6 +139,7 @@ export function AddRepoDialogStepContent({
     return (
       <AddRepoLocalStartStep
         repoCount={repoCount}
+        isSshLikely={isSshLikely}
         isAdding={isAdding}
         addProjectBusyLabel={addProjectBusyLabel}
         nestedScanInProgress={nestedScanInProgress}
