@@ -62,8 +62,13 @@ type LinearIssueConnection = {
   nodes?: LinearIssueNode[]
   pageInfo?: {
     hasNextPage?: boolean
+    endCursor?: string | null
   }
 }
+
+// Why: Linear's GraphQL caps connection `first` at 50, so larger Orca reads
+// must walk cursors instead of asking for the whole expanded limit at once.
+const LINEAR_ISSUE_API_PAGE_SIZE_MAX = 50
 
 type LinearRawVariables = Record<string, unknown>
 
@@ -111,13 +116,19 @@ const SEARCH_ISSUES_QUERY = `
 `
 
 const ALL_ISSUES_QUERY = `
-  query OrcaLinearIssues($first: Int, $filter: IssueFilter, $orderBy: PaginationOrderBy) {
-    issues(first: $first, filter: $filter, orderBy: $orderBy) {
+  query OrcaLinearIssues(
+    $first: Int,
+    $after: String,
+    $filter: IssueFilter,
+    $orderBy: PaginationOrderBy
+  ) {
+    issues(first: $first, after: $after, filter: $filter, orderBy: $orderBy) {
       nodes {
         ${LINEAR_ISSUE_NODE_FIELDS}
       }
       pageInfo {
         hasNextPage
+        endCursor
       }
     }
   }
@@ -126,16 +137,18 @@ const ALL_ISSUES_QUERY = `
 const VIEWER_ASSIGNED_ISSUES_QUERY = `
   query OrcaLinearViewerAssignedIssues(
     $first: Int,
+    $after: String,
     $filter: IssueFilter,
     $orderBy: PaginationOrderBy
   ) {
     viewer {
-      assignedIssues(first: $first, filter: $filter, orderBy: $orderBy) {
+      assignedIssues(first: $first, after: $after, filter: $filter, orderBy: $orderBy) {
         nodes {
           ${LINEAR_ISSUE_NODE_FIELDS}
         }
         pageInfo {
           hasNextPage
+          endCursor
         }
       }
     }
@@ -145,16 +158,18 @@ const VIEWER_ASSIGNED_ISSUES_QUERY = `
 const VIEWER_CREATED_ISSUES_QUERY = `
   query OrcaLinearViewerCreatedIssues(
     $first: Int,
+    $after: String,
     $filter: IssueFilter,
     $orderBy: PaginationOrderBy
   ) {
     viewer {
-      createdIssues(first: $first, filter: $filter, orderBy: $orderBy) {
+      createdIssues(first: $first, after: $after, filter: $filter, orderBy: $orderBy) {
         nodes {
           ${LINEAR_ISSUE_NODE_FIELDS}
         }
         pageInfo {
           hasNextPage
+          endCursor
         }
       }
     }
@@ -335,54 +350,63 @@ export async function listIssues(
       await acquire()
       try {
         const orderBy = 'updatedAt'
-        const variables = { first: effectiveLimit, orderBy }
 
-        if (filter === 'assigned') {
+        const fetchPage = async (
+          first: number,
+          after: string | undefined
+        ): Promise<LinearIssueConnection | undefined> => {
+          const baseVars: LinearRawVariables = { first, orderBy }
+          if (after !== undefined) {
+            baseVars.after = after
+          }
+          if (filter === 'assigned') {
+            const result = await entry.client.client.rawRequest<
+              LinearIssueConnectionResponse,
+              LinearRawVariables
+            >(VIEWER_ASSIGNED_ISSUES_QUERY, { ...baseVars, filter: ACTIVE_STATE_FILTER })
+            return result.data?.viewer?.assignedIssues
+          }
+          if (filter === 'created') {
+            const result = await entry.client.client.rawRequest<
+              LinearIssueConnectionResponse,
+              LinearRawVariables
+            >(VIEWER_CREATED_ISSUES_QUERY, { ...baseVars, filter: ACTIVE_STATE_FILTER })
+            return result.data?.viewer?.createdIssues
+          }
+          if (filter === 'completed') {
+            const result = await entry.client.client.rawRequest<
+              LinearIssueConnectionResponse,
+              LinearRawVariables
+            >(VIEWER_ASSIGNED_ISSUES_QUERY, { ...baseVars, filter: COMPLETED_STATE_FILTER })
+            return result.data?.viewer?.assignedIssues
+          }
           const result = await entry.client.client.rawRequest<
             LinearIssueConnectionResponse,
             LinearRawVariables
-          >(VIEWER_ASSIGNED_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
-          const connection = result.data?.viewer?.assignedIssues
-          return {
-            items: (connection?.nodes ?? []).map((issue) => mapRawIssueForWorkspace(entry, issue)),
-            hasMore: Boolean(connection?.pageInfo?.hasNextPage)
-          }
+          >(ALL_ISSUES_QUERY, { ...baseVars, filter: ACTIVE_STATE_FILTER })
+          return result.data?.issues
         }
 
-        if (filter === 'created') {
-          const result = await entry.client.client.rawRequest<
-            LinearIssueConnectionResponse,
-            LinearRawVariables
-          >(VIEWER_CREATED_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
-          const connection = result.data?.viewer?.createdIssues
-          return {
-            items: (connection?.nodes ?? []).map((issue) => mapRawIssueForWorkspace(entry, issue)),
-            hasMore: Boolean(connection?.pageInfo?.hasNextPage)
+        // Why: Linear caps connection pages at 50, so walk cursors when the
+        // requested limit exceeds the per-page max instead of asking for the
+        // expanded limit in a single request.
+        const items: LinearIssue[] = []
+        let after: string | undefined
+        let hasMore = false
+        while (items.length < effectiveLimit) {
+          const remaining = effectiveLimit - items.length
+          const pageSize = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, remaining)
+          const connection = await fetchPage(pageSize, after)
+          const nodes = connection?.nodes ?? []
+          items.push(...nodes.map((issue) => mapRawIssueForWorkspace(entry, issue)))
+          hasMore = Boolean(connection?.pageInfo?.hasNextPage)
+          const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+          if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {
+            break
           }
+          after = nextCursor
         }
-
-        if (filter === 'completed') {
-          const result = await entry.client.client.rawRequest<
-            LinearIssueConnectionResponse,
-            LinearRawVariables
-          >(VIEWER_ASSIGNED_ISSUES_QUERY, { ...variables, filter: COMPLETED_STATE_FILTER })
-          const connection = result.data?.viewer?.assignedIssues
-          return {
-            items: (connection?.nodes ?? []).map((issue) => mapRawIssueForWorkspace(entry, issue)),
-            hasMore: Boolean(connection?.pageInfo?.hasNextPage)
-          }
-        }
-
-        // 'all' — all active issues across the workspace
-        const result = await entry.client.client.rawRequest<
-          LinearIssueConnectionResponse,
-          LinearRawVariables
-        >(ALL_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
-        const connection = result.data?.issues
-        return {
-          items: (connection?.nodes ?? []).map((issue) => mapRawIssueForWorkspace(entry, issue)),
-          hasMore: Boolean(connection?.pageInfo?.hasNextPage)
-        }
+        return { items, hasMore }
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
