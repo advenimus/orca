@@ -12,7 +12,8 @@ import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import {
   createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive
+  isWebRuntimeSessionActive,
+  isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -41,6 +42,15 @@ export type LaunchAgentInNewTabArgs = {
   launchPlatform?: NodeJS.Platform
   /** Called after the prompt is actually delivered to the agent input path. */
   onPromptDelivered?: () => void
+}
+
+function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
+  const state = useAppStore.getState()
+  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+    if (tab.launchAgent && !isWebTerminalSurfaceTabId(tab.id)) {
+      state.closeTab(tab.id)
+    }
+  }
 }
 
 export type LaunchAgentInNewTabResult = {
@@ -197,12 +207,15 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   if (isWebRuntimeSessionActive(runtimeEnvironmentId) && pasteDraftAfterLaunch === null) {
     // Why: paired web tabs are host-owned. Local-only agent tabs cannot be
     // closed because close routes through session.tabs.close on the host.
+    removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
     void createWebRuntimeSessionTerminal({
       worktreeId,
       environmentId: runtimeEnvironmentId,
       targetGroupId: groupId,
       activate: true,
       ...(hasPrompt ? { command: startupPlan.launchCommand } : { agent })
+    }).then(() => {
+      removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
     })
     store.setActiveTabType('terminal')
     if (hasPrompt) {

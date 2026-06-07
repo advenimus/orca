@@ -424,6 +424,9 @@ async function callWebRuntimeSessionTabMethod(
       timeoutMs: 15_000
     })
     unwrapRuntimeRpcResult(response as RuntimeRpcResponse<unknown>)
+    if (method === 'session.tabs.close') {
+      await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId)
+    }
     return true
   } catch (error) {
     console.warn(

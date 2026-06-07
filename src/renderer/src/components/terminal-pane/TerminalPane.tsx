@@ -1148,6 +1148,11 @@ export default function TerminalPane({
         if (getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
           continue
         }
+        // Why: skip forwarding a stale near-zero fit to the host PTY while the
+        // overlay is still settling after a worktree switch.
+        if (pane.terminal.cols < 8 || pane.terminal.rows < 4) {
+          continue
+        }
         transport.resize(pane.terminal.cols, pane.terminal.rows)
       }
     }

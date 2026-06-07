@@ -124,25 +124,24 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       resizeObserver.disconnect()
       window.removeEventListener('resize', updateRect)
     }
-  }, [anchorName, groupId])
+  }, [anchorName, groupId, isVisible])
 
   useLayoutEffect(() => {
-    if (
-      !isVisible ||
-      !anchorName ||
-      shouldUseCssAnchorPositioning() ||
-      measuredFallbackRect === null
-    ) {
+    if (!isVisible || !anchorName || shouldUseCssAnchorPositioning()) {
       return
     }
-    // Why: web fallback positioning is measured after the terminal pane resumes.
-    // A restored PTY can otherwise fit at its stale pre-measure width and keep
-    // TUIs such as Claude Code narrow until a later user-driven resize.
+    // Why: worktree switches resume visibility before fallback positioning
+    // settles. Re-fit on show and again after the measured rect lands so the
+    // PTY never stays pinned at a stale ~2-col width.
     const frameId = requestAnimationFrame(() => {
       window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
     })
+    const retryId = window.setTimeout(() => {
+      window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
+    }, 50)
     return () => {
       cancelAnimationFrame(frameId)
+      window.clearTimeout(retryId)
     }
   }, [anchorName, isVisible, measuredFallbackRect])
 

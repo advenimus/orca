@@ -6,12 +6,16 @@ import {
   activateAndRevealWorktree,
   ensureWebRuntimeWorktreeTerminalAfterWake
 } from './worktree-activation'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync'
+import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
 
 const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   vi.unstubAllGlobals()
+  resetWebSessionTabsSnapshotFreshnessForTests()
+  resetWebRuntimeWakeTerminalRespawnForTests()
   useAppStore.setState(initialAppStoreState, true)
 })
 
@@ -381,6 +385,78 @@ describe('activateAndRevealWorktree created agent reopen', () => {
 
     expect(result).toEqual({ primaryTabId: null })
     expect(useAppStore.getState().activeWorktreeId).toBe(worktree.id)
+    expect(callRuntimeEnvironment).not.toHaveBeenCalled()
+  })
+
+  it('does not respawn when the host snapshot still has terminal tabs', async () => {
+    const worktree = makeWorktree()
+    const callRuntimeEnvironment = vi.fn()
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/workspace/repo',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      tabsByWorktree: {
+        [worktree.id]: [
+          {
+            id: 'tab-1',
+            ptyId: 'pty-1',
+            worktreeId: worktree.id,
+            title: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      ptyIdsByTabId: { 'tab-1': [] },
+      settings: {
+        ...getDefaultSettings('/workspace/.orca-workspaces'),
+        activeRuntimeEnvironmentId: 'web-runtime-1'
+      },
+      reconcileWorktreeTabModel: vi.fn(() => ({
+        renderableTabCount: 1,
+        activeRenderableTabId: 'tab-1'
+      }))
+    })
+
+    const { shouldApplyWebSessionTabsSnapshot } = await import('@/runtime/web-session-tabs-sync')
+    shouldApplyWebSessionTabsSnapshot(
+      {
+        worktree: worktree.id,
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: 'group-1',
+        activeTabId: 'host-tab-1',
+        activeTabType: 'terminal',
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'host-tab-1::leaf',
+            title: 'Terminal',
+            parentTabId: 'host-tab-1',
+            leafId: '11111111-1111-4111-8111-111111111111',
+            isActive: true,
+            status: 'ready',
+            terminal: 'term_host'
+          }
+        ]
+      },
+      'web-runtime-1'
+    )
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
     expect(callRuntimeEnvironment).not.toHaveBeenCalled()
   })
 

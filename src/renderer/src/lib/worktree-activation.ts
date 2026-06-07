@@ -19,8 +19,14 @@ import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   activateWebRuntimeSessionWorktree,
   createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive
+  isWebRuntimeSessionActive,
+  isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
+import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync'
+import {
+  beginWebRuntimeWakeTerminalRespawn,
+  endWebRuntimeWakeTerminalRespawn
+} from '@/runtime/web-runtime-wake-terminal-respawn'
 import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
@@ -257,8 +263,23 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
     return
   }
 
+  const hasMirroredHostTabs = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
+  if (hasMirroredHostTabs) {
+    // Why: the host session still owns these tabs — wait for the mirror to
+    // repopulate PTY handles instead of creating a duplicate terminal.
+    return
+  }
+
+  if (getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) > 0) {
+    return
+  }
+
   const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
   if (renderableTabCount === 0) {
+    return
+  }
+
+  if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
     return
   }
 
@@ -269,6 +290,8 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
     environmentId: runtimeEnvironmentId,
     activate: true,
     selectWorktree: false
+  }).finally(() => {
+    endWebRuntimeWakeTerminalRespawn(worktreeId)
   })
 }
 

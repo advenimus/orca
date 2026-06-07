@@ -39,6 +39,11 @@ import {
   WEB_TERMINAL_SURFACE_TAB_PREFIX
 } from './web-runtime-session'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import {
+  beginWebRuntimeWakeTerminalRespawn,
+  endWebRuntimeWakeTerminalRespawn,
+  shouldSkipWebRuntimeWakeTerminalRespawn
+} from './web-runtime-wake-terminal-respawn'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -57,6 +62,7 @@ type SnapshotFreshness = {
 }
 
 const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
+const lastHostTerminalTabCountByWorktree = new Map<string, number>()
 const hostSessionTabIdByLocalKey = new Map<string, string>()
 
 type TerminalSurface = RuntimeMobileSessionTerminalClientTab
@@ -130,6 +136,24 @@ function sessionTabsFreshnessKey(environmentId: string, worktreeId: string): str
   return `${environmentId}:${worktreeId}`
 }
 
+function rememberHostTerminalTabCount(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult
+): void {
+  const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+  const terminalCount = snapshot.tabs.filter((tab) => tab.type === 'terminal').length
+  lastHostTerminalTabCountByWorktree.set(key, terminalCount)
+}
+
+export function getLastKnownHostTerminalTabCount(
+  environmentId: string,
+  worktreeId: string
+): number {
+  return (
+    lastHostTerminalTabCountByWorktree.get(sessionTabsFreshnessKey(environmentId, worktreeId)) ?? 0
+  )
+}
+
 export function shouldApplyWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string
@@ -142,6 +166,7 @@ export function shouldApplyWebSessionTabsSnapshot(
     clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
     return true
   }
+  rememberHostTerminalTabCount(environmentId, snapshot)
   const current = latestSessionTabsSnapshotByWorktree.get(key)
   if (
     current &&
@@ -181,10 +206,12 @@ export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
   snapshotIsFresh: boolean
   localTerminalCount: number
   hasLiveLocalPty: boolean
+  skipWakeRespawn?: boolean
 }): boolean {
   if (
     !args.snapshotIsFresh ||
     args.requestedRespawnAfterWake ||
+    args.skipWakeRespawn === true ||
     args.localTerminalCount === 0 ||
     args.hasLiveLocalPty ||
     (args.event.type !== 'snapshot' && args.event.type !== 'updated')
@@ -200,6 +227,7 @@ export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
+  lastHostTerminalTabCountByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
 }
 
@@ -214,7 +242,9 @@ export function _getWebSessionTabsTrackingCountsForTest(): {
 }
 
 function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeId: string): void {
-  latestSessionTabsSnapshotByWorktree.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  latestSessionTabsSnapshotByWorktree.delete(key)
+  lastHostTerminalTabCountByWorktree.delete(key)
   const keyPrefix = `${environmentId}:${worktreeId}:`
   for (const key of hostSessionTabIdByLocalKey.keys()) {
     if (key.startsWith(keyPrefix)) {
@@ -232,6 +262,11 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       latestSessionTabsSnapshotByWorktree.delete(key)
+    }
+  }
+  for (const key of lastHostTerminalTabCountByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      lastHostTerminalTabCountByWorktree.delete(key)
     }
   }
   for (const key of hostSessionTabIdByLocalKey.keys()) {
@@ -386,6 +421,11 @@ function shouldReplaceTerminalTab(
   nextRemotePtyIds: ReadonlySet<string>,
   nextMirroredTerminalIds: ReadonlySet<string>
 ): boolean {
+  if (tab.launchAgent && !isMirroredTerminalSurfaceId(tab.id) && nextMirroredTerminalIds.size > 0) {
+    // Why: paired web agent quick-launch used to create local-only tabs before
+    // the host snapshot landed. Once host mirrors exist, retire the stale row.
+    return true
+  }
   if (isMirroredTerminalSurfaceId(tab.id)) {
     // Why: host session snapshots are authoritative for host-mirrored tabs.
     // Replace old mirrors even when the next surface is still waiting on a
@@ -2239,7 +2279,8 @@ export function useWebSessionTabsSync(): void {
               requestedRespawnAfterWake,
               snapshotIsFresh: fresh,
               localTerminalCount,
-              hasLiveLocalPty
+              hasLiveLocalPty,
+              skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
             })
             if (fresh) {
               useAppStore.setState((state) =>
@@ -2253,13 +2294,19 @@ export function useWebSessionTabsSync(): void {
                 environmentId,
                 activate: true
               })
-            } else if (!disposed && shouldRespawnAfterWake) {
+            } else if (
+              !disposed &&
+              shouldRespawnAfterWake &&
+              beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)
+            ) {
               requestedRespawnAfterWake = true
               void createWebRuntimeSessionTerminal({
                 worktreeId: activeWorktreeId,
                 environmentId,
                 activate: true,
                 selectWorktree: false
+              }).finally(() => {
+                endWebRuntimeWakeTerminalRespawn(activeWorktreeId)
               })
             }
           },

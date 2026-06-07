@@ -394,8 +394,20 @@ export default function SortableTab({
           // the store — a store-only assertion would pass even if this
           // button had been accidentally unmounted.
           aria-label={`Close tab ${tabTitle}`}
-          onPointerDown={(e) => e.stopPropagation()}
+          type="button"
+          data-tab-close-button="true"
+          onPointerDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation()
+            }
+          }}
+          onMouseDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation()
+            }
+          }}
           onClick={(e) => {
+            e.preventDefault()
             e.stopPropagation()
             onClose(tab.id)
           }}

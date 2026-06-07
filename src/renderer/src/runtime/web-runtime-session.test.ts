@@ -726,11 +726,23 @@ describe('web runtime session tab actions', () => {
   })
 
   it('maps mirrored local browser unified ids for activate and close', async () => {
-    const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'action',
-      ok: true,
-      result: {}
-    })
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'activate',
+        ok: true,
+        result: {}
+      })
+      .mockResolvedValueOnce({
+        id: 'close',
+        ok: true,
+        result: {}
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: true,
+        result: makeSnapshot()
+      })
 
     vi.stubGlobal('window', {
       api: {
@@ -771,6 +783,15 @@ describe('web runtime session tab actions', () => {
       },
       timeoutMs: 15_000
     })
+    expect(runtimeCall).toHaveBeenNthCalledWith(3, {
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.list',
+      params: {
+        worktree: `id:${WORKTREE_ID}`
+      },
+      timeoutMs: 15_000
+    })
+    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalled()
   })
 })
 

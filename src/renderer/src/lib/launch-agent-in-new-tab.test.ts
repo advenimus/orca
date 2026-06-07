@@ -20,6 +20,7 @@ const store = {
   tabBarOrderByWorktree: {} as Record<string, string[]>,
   terminalLayoutsByTabId: {} as Record<string, { activeLeafId: string | null }>,
   createTab: mockCreateTab,
+  closeTab: vi.fn(),
   queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: mockSetActiveTabType,
   setTabBarOrder: mockSetTabBarOrder,
@@ -60,7 +61,8 @@ const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
+  isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive,
+  isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 
 describe('launchAgentInNewTab', () => {
@@ -94,6 +96,12 @@ describe('launchAgentInNewTab', () => {
   it('delegates agent quick launch to the host runtime in paired web clients', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'web-runtime' }
+    store.tabsByWorktree = {
+      'wt-1': [
+        { id: 'tab-1' },
+        { id: 'stale-agent-tab', launchAgent: 'claude' } as { id: string; launchAgent: string }
+      ]
+    }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -118,6 +126,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
     expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(store.closeTab).toHaveBeenCalledWith('stale-agent-tab')
   })
 
   it('queues initial working status for Command Code argv prompt launches', async () => {
