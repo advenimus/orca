@@ -264,7 +264,19 @@ export class SttService {
       throw new Error('dictation_owner_mismatch')
     }
     if (this.cloudSession) {
-      this.cloudSession.feedAudio(samples, sampleRate)
+      try {
+        this.cloudSession.feedAudio(samples, sampleRate)
+      } catch (error) {
+        // Why: the cloud session throws synchronously once the per-dictation
+        // duration cap is hit. Without routing it through the event sink the
+        // throw rejects the IPC invoke and is swallowed by the renderer's
+        // live-feed .catch, leaving dictation stuck "listening" while every
+        // later frame is silently dropped.
+        this.eventSink?.({
+          type: 'error',
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
       return
     }
     this.worker?.postMessage({ type: 'feed', samples, sampleRate }, [samples.buffer as ArrayBuffer])

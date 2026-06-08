@@ -76,6 +76,7 @@ const {
   class HoistedMockOpenAiTranscriptionSession {
     static instances: HoistedMockOpenAiTranscriptionSession[] = []
     feedCalls: { samples: Float32Array; sampleRate: number }[] = []
+    feedAudioError: Error | null = null
 
     constructor(
       readonly modelId: string,
@@ -85,6 +86,9 @@ const {
     }
 
     feedAudio(samples: Float32Array, sampleRate: number): void {
+      if (this.feedAudioError) {
+        throw this.feedAudioError
+      }
       this.feedCalls.push({ samples, sampleRate })
     }
 
@@ -259,6 +263,27 @@ describe('SttService', () => {
       text: 'openai-model:test-openai-key'
     })
     expect(sink).toHaveBeenCalledWith({ type: 'stopped' })
+  })
+
+  it('routes a synchronous cloud feedAudio throw through the event sink', async () => {
+    const sink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('openai-model', sink, undefined, 'desktop')
+    const session = getCloudSessions()[0]
+    session.feedAudioError = new Error('Cloud transcription is limited to 10 minutes per dictation')
+
+    // Why: the throw must not escape feedAudio — the IPC handler has no
+    // try/catch and the renderer swallows the rejection, so an un-routed throw
+    // leaves dictation stuck "listening" with all further audio dropped.
+    expect(() => service.feedAudio(new Float32Array([0.25]), 16000, 'desktop')).not.toThrow()
+    expect(sink).toHaveBeenCalledWith({
+      type: 'error',
+      error: 'Cloud transcription is limited to 10 minutes per dictation'
+    })
   })
 
   it('reads the OpenAI key only when finishing cloud dictation', async () => {
