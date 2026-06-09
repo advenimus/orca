@@ -32,8 +32,12 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     macOptionClickForcesSelection: true,
     drawBoldTextInBrightColors: true,
     scrollbar: {
-      // Why: xterm's DOM scrollbar overlays the terminal in Electron; reserving
-      // gutter width in FitAddon underfits wide table/TUI output by a column.
+      // Why: xterm's own scrollbar must stay disabled. A non-zero width makes
+      // FitAddon reserve a gutter (underfits wide table/TUI output by a
+      // column, #4877) and its render pipeline destabilizes scroll restore
+      // after workspace switches (terminal-long-table-scroll-restore e2e).
+      // Orca draws its own overlay scrollbar instead — see
+      // pane-overlay-scrollbar.ts.
       width: 0
     },
     // Why: advertise kitty keyboard protocol support so CLIs that probe

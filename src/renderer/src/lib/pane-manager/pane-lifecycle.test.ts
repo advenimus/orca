@@ -76,7 +76,10 @@ describe('buildDefaultTerminalOptions', () => {
     expect(buildDefaultTerminalOptions().cursorInactiveStyle).toBe('outline')
   })
 
-  it('does not reserve a classic scrollbar gutter when fitting terminal columns', () => {
+  it('keeps the xterm scrollbar disabled in favor of the Orca overlay scrollbar', () => {
+    // Why: a non-zero width makes FitAddon reserve a column-eating gutter
+    // (#4877) and destabilizes restore scroll sync; the visible scrollbar is
+    // Orca's own overlay (pane-overlay-scrollbar.ts).
     expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(0)
   })
 

@@ -42,10 +42,43 @@
   background-color: transparent;
 }
 
-/* Round the xterm DOM scrollbar thumb; xterm has no option for this, and its
-   default .xterm-slider has square corners. */
-.xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider {
+/* Orca overlay scrollbar — xterm's own scrollbar stays disabled (it reserves
+   a FitAddon gutter and destabilizes restore scroll sync; see
+   pane-overlay-scrollbar.ts). The track is a 10px hover/hit strip that only
+   accepts pointer input while visible so the terminal's right edge never
+   dead-zones when the bar is faded out. */
+.pane-overlay-scrollbar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  z-index: 9; /* above terminal content, below drag handle (z:10) */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.pane-overlay-scrollbar.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pane-overlay-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  right: 1px;
+  width: 7px;
   border-radius: 4px;
+  background: rgba(180, 180, 185, 0.4);
+}
+
+.pane-overlay-scrollbar-thumb:hover {
+  background: rgba(180, 180, 185, 0.6);
+}
+
+.pane-overlay-scrollbar.is-dragging .pane-overlay-scrollbar-thumb {
+  background: rgba(180, 180, 185, 0.8);
 }
 
 /* xterm.css sets position:absolute;top:0 on .xterm-helpers but omits left,
