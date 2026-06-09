@@ -676,6 +676,7 @@ export function connectPanePty(
   let synchronizedForegroundOutputActive = false
   let synchronizedHiddenOutputActive = false
   let synchronizedHiddenOutputScanTail = ''
+  let synchronizedHiddenOutputPtyId: string | null = null
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
@@ -2650,6 +2651,14 @@ export function connectPanePty(
       const foreground = shouldWritePtyOutputForeground(deps.isVisibleRef.current)
       const restoreAppliesToCurrentPty =
         hiddenOutputRestorePtyId !== null && transport.getPtyId() === hiddenOutputRestorePtyId
+      const dataPtyId = transport.getPtyId()
+      if (synchronizedHiddenOutputPtyId !== dataPtyId) {
+        // Why: DEC 2026 state is per PTY stream; a restarted/reattached PTY
+        // must not inherit synchronized classification from the old shell.
+        synchronizedHiddenOutputPtyId = dataPtyId
+        synchronizedHiddenOutputActive = false
+        synchronizedHiddenOutputScanTail = ''
+      }
       const hiddenSynchronizedScanData = synchronizedHiddenOutputScanTail + data
       const synchronizedOutputStarted = containsSynchronizedOutputStart(hiddenSynchronizedScanData)
       const synchronizedOutputEnded = containsSynchronizedOutputEnd(hiddenSynchronizedScanData)
@@ -2722,6 +2731,13 @@ export function connectPanePty(
           hiddenSynchronizedScanData
         )
       } else {
+        // Why: a DEC 2026 end consumed while visible must still clear hidden
+        // synchronized state, or later hidden plain output is misclassified
+        // under the permissive synchronized model grammar.
+        synchronizedHiddenOutputActive = shouldSynchronizedOutputRemainActive(
+          hiddenSynchronizedScanData,
+          synchronizedHiddenOutputActive
+        )
         synchronizedHiddenOutputScanTail = ''
       }
 

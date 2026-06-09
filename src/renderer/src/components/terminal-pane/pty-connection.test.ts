@@ -3171,6 +3171,88 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('clears hidden synchronized state when the end marker arrives while visible', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const isVisibleRef = { current: false }
+    const deps = createDeps({ isVisibleRef })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+    const hiddenSyncQueryChunk = '\x1b[?2026h\x1b[6n'
+    const foregroundEndChunk = 'done\x1b[?2026l'
+    const hiddenWideGlyphChunk = '│ 漢字 ║ 🚀 │\r\n'
+
+    vi.useFakeTimers()
+    try {
+      capturedDataCallback.current?.(hiddenSyncQueryChunk)
+      isVisibleRef.current = true
+      capturedDataCallback.current?.(foregroundEndChunk)
+      isVisibleRef.current = false
+      capturedDataCallback.current?.(hiddenWideGlyphChunk)
+
+      vi.advanceTimersByTime(50)
+      // Why: the synchronized frame ended while visible, so the wide-glyph
+      // hidden output must be judged by the strict plain rules and stay live.
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        expect.stringContaining(hiddenWideGlyphChunk)
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not inherit hidden synchronized state across PTY restarts', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+    const hiddenSyncQueryChunk = '\x1b[?2026h\x1b[6n'
+    const hiddenWideGlyphChunk = '│ 漢字 ║ 🚀 │\r\n'
+
+    vi.useFakeTimers()
+    try {
+      capturedDataCallback.current?.(hiddenSyncQueryChunk)
+      ;(transport.attach as unknown as (opts: { existingPtyId: string }) => void)({
+        existingPtyId: 'pty-id-2'
+      })
+      capturedDataCallback.current?.(hiddenWideGlyphChunk)
+
+      vi.advanceTimersByTime(50)
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        expect.stringContaining(hiddenWideGlyphChunk)
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps hidden synchronized terminal queries on the live xterm path', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
