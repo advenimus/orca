@@ -26,6 +26,7 @@ import type {
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
+import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 
 // Re-exported for backward compat with renderer call sites that import
@@ -1160,6 +1161,9 @@ export type LinearConnectionStatus = {
   workspaces?: LinearWorkspace[]
   activeWorkspaceId?: string | null
   selectedWorkspaceId?: LinearWorkspaceSelection | null
+  // Set when a stored token file exists but could not be decrypted, so the
+  // UI can explain reads failing while the connection still looks saved.
+  credentialError?: string
 }
 
 export type LinearIssue = {
@@ -2039,6 +2043,7 @@ export type GlobalSettings = {
   terminalCursorStyleDefaultedToBlock?: boolean
   terminalCursorBlink: boolean
   terminalThemeDark: string
+  terminalCustomThemes?: TerminalCustomTheme[]
   terminalDividerColorDark: string
   terminalUseSeparateLightTheme: boolean
   terminalThemeLight: string
@@ -2665,6 +2670,13 @@ export type PersistedUIState = {
   /** User-hidden sidebar entry for the setup guide. The Help menu remains
    *  available so this is a reversible declutter preference, not completion. */
   setupGuideSidebarDismissed?: boolean
+  /** One-shot migration marker for the browser setup-guide milestone. Existing
+   *  profiles missing this marker are evaluated once in the renderer because
+   *  full checklist completion depends on runtime probes. */
+  setupGuideBrowserMilestoneMigrated?: boolean
+  /** Existing users who completed or dismissed the pre-browser checklist stay
+   *  complete after the browser milestone is added. */
+  setupGuideBrowserMilestoneLegacyComplete?: boolean
   /** User-dismissed browser import hint in the browser toolbar. Import remains
    *  available from Settings > Browser and the toolbar overflow menu. */
   browserImportHintHidden?: boolean
