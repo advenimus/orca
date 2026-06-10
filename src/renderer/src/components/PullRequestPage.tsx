@@ -1026,7 +1026,7 @@ function PRReviewersPanel({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {translate('auto.components.PullRequestPage.ae9a38fd4a', 'Remove reviewer')}
+                        {translate('auto.components.PullRequestPage.7f964a365a', 'Remove reviewer')}
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
@@ -4476,7 +4476,7 @@ function ChecksTab({
       title={translate('auto.components.PullRequestPage.a053bdd082', 'Fix Broken Checks With AI')}
       description={translate(
         'auto.components.PullRequestPage.ddfd42f460',
-        'Choose the agent and edit the full command input before launch.'
+        'Review the prompt before starting an agent.'
       )}
       baseCommandInput={fixChecksComposerPrompt ?? ''}
       connectionId={repo?.connectionId ?? null}

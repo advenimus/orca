@@ -2108,6 +2108,12 @@ export class Store {
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               setupGuideSidebarDismissed,
+              setupGuideBrowserMilestoneMigrated:
+                typeof parsed.ui?.setupGuideBrowserMilestoneMigrated === 'boolean'
+                  ? parsed.ui.setupGuideBrowserMilestoneMigrated
+                  : false,
+              setupGuideBrowserMilestoneLegacyComplete:
+                parsed.ui?.setupGuideBrowserMilestoneLegacyComplete === true,
               sortBy: migrate ? ('smart' as const) : sort,
               showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
                 parsed.ui?.showDotfilesByWorktree

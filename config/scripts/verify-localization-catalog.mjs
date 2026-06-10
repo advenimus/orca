@@ -8,6 +8,7 @@ import ts from 'typescript'
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
 const LOCALIZATION_FUNCTION_NAMES = new Set(['t', 'translate', 'translateMain'])
+const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 
 function normalizePath(root, filePath) {
   return path.relative(root, filePath).split(path.sep).join('/')
@@ -69,13 +70,14 @@ function expressionNameText(node) {
   return undefined
 }
 
-function reportAt(root, filePath, sourceFile, node, key) {
+function reportAt(root, filePath, sourceFile, node, key, fallback) {
   const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
   return {
     filePath: normalizePath(root, filePath),
     line: position.line + 1,
     column: position.character + 1,
-    key
+    key,
+    fallback
   }
 }
 
@@ -102,7 +104,17 @@ export function collectLocalizationKeyReferences(filePath, sourceText, root = pr
         firstArg &&
         ts.isStringLiteralLike(firstArg)
       ) {
-        references.push(reportAt(root, filePath, sourceFile, firstArg, firstArg.text))
+        const secondArg = node.arguments[1]
+        references.push(
+          reportAt(
+            root,
+            filePath,
+            sourceFile,
+            firstArg,
+            firstArg.text,
+            secondArg && ts.isStringLiteralLike(secondArg) ? secondArg.text : undefined
+          )
+        )
       }
     }
 
@@ -121,8 +133,138 @@ function formatMissingReferences(missing) {
     .join('\n')
 }
 
+function formatMissingKeys(label, keys) {
+  return keys.map((key) => `${label}: ${key}`).join('\n')
+}
+
+function normalizeInterpolationVariables(value) {
+  return collectInterpolationVariables(value)
+    .map((variable) => variable.slice(2, -2))
+    .join('|')
+}
+
+function formatInconsistentFallbackVariables(inconsistentFallbackVariables) {
+  return inconsistentFallbackVariables
+    .map(({ key, references }) => {
+      const locations = references
+        .map(
+          (reference) =>
+            `  ${reference.filePath}:${reference.line}:${reference.column} ${JSON.stringify(reference.fallback)}`
+        )
+        .join('\n')
+      return `${key}\n${locations}`
+    })
+    .join('\n\n')
+}
+
+function collectInconsistentFallbackVariables(references) {
+  const byKey = new Map()
+
+  for (const reference of references) {
+    if (typeof reference.fallback !== 'string') {
+      continue
+    }
+    const existing = byKey.get(reference.key) ?? []
+    existing.push(reference)
+    byKey.set(reference.key, existing)
+  }
+
+  return [...byKey.entries()]
+    .map(([key, keyReferences]) => {
+      const uniqueFallbackVariables = new Set(
+        keyReferences.map((reference) => normalizeInterpolationVariables(reference.fallback))
+      )
+      return {
+        key,
+        references: keyReferences,
+        uniqueFallbackVariableCount: uniqueFallbackVariables.size
+      }
+    })
+    .filter(({ uniqueFallbackVariableCount }) => uniqueFallbackVariableCount > 1)
+}
+
+function collectInterpolationVariables(value) {
+  if (typeof value === 'string') {
+    const matches = value.match(PLACEHOLDER_RE) ?? []
+    return [...matches].sort()
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return []
+  }
+  return Object.values(value).flatMap((child) => collectInterpolationVariables(child))
+}
+
+function flattenCatalogEntries(value, prefix = '', entries = new Map()) {
+  if (typeof value === 'string') {
+    entries.set(prefix, value)
+    return entries
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return entries
+  }
+  for (const [key, child] of Object.entries(value)) {
+    flattenCatalogEntries(child, prefix ? `${prefix}.${key}` : key, entries)
+  }
+  return entries
+}
+
+function verifyLocaleParity(enCatalog, localeName, localeCatalog) {
+  const enEntries = flattenCatalogEntries(enCatalog)
+  const localeEntries = flattenCatalogEntries(localeCatalog)
+  const missingInLocale = [...enEntries.keys()].filter((key) => !localeEntries.has(key))
+  const extraInLocale = [...localeEntries.keys()].filter((key) => !enEntries.has(key))
+  const interpolationMismatches = []
+
+  for (const key of enEntries.keys()) {
+    if (!localeEntries.has(key)) {
+      continue
+    }
+    const enVariables = collectInterpolationVariables(enEntries.get(key))
+    const localeVariables = collectInterpolationVariables(localeEntries.get(key))
+    if (enVariables.join('|') !== localeVariables.join('|')) {
+      interpolationMismatches.push(key)
+    }
+  }
+
+  if (
+    missingInLocale.length > 0 ||
+    extraInLocale.length > 0 ||
+    interpolationMismatches.length > 0
+  ) {
+    console.error(`Locale catalog parity failed for ${localeName}.json.`)
+    if (missingInLocale.length > 0) {
+      console.error('')
+      console.error(formatMissingKeys('missing', missingInLocale.slice(0, 20)))
+      if (missingInLocale.length > 20) {
+        console.error(`...and ${missingInLocale.length - 20} more missing keys`)
+      }
+    }
+    if (extraInLocale.length > 0) {
+      console.error('')
+      console.error(formatMissingKeys('extra', extraInLocale.slice(0, 20)))
+      if (extraInLocale.length > 20) {
+        console.error(`...and ${extraInLocale.length - 20} more extra keys`)
+      }
+    }
+    if (interpolationMismatches.length > 0) {
+      console.error('')
+      console.error(
+        formatMissingKeys('interpolation mismatch', interpolationMismatches.slice(0, 20))
+      )
+      if (interpolationMismatches.length > 20) {
+        console.error(`...and ${interpolationMismatches.length - 20} more interpolation mismatches`)
+      }
+    }
+    return 1
+  }
+
+  console.log(`Verified locale parity for ${localeName}.json (${localeEntries.size} keys).`)
+  return 0
+}
+
 export async function main(root = process.cwd()) {
-  const catalogPath = path.join(root, 'src', 'renderer', 'src', 'i18n', 'locales', 'en.json')
+  const localesDir = path.join(root, 'src', 'renderer', 'src', 'i18n', 'locales')
+  const catalogPath = path.join(localesDir, 'en.json')
   const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'))
   const catalogKeys = new Set(flattenCatalogKeys(catalog))
   const sourceRoots = [path.join(root, 'src', 'renderer', 'src'), path.join(root, 'src', 'main')]
@@ -145,7 +287,36 @@ export async function main(root = process.cwd()) {
     return 1
   }
 
+  const inconsistentFallbackVariables = collectInconsistentFallbackVariables(references)
+  if (inconsistentFallbackVariables.length > 0) {
+    console.error('Localization keys are used with inconsistent interpolation placeholders.')
+    console.error('')
+    console.error(formatInconsistentFallbackVariables(inconsistentFallbackVariables))
+    return 1
+  }
+
   console.log(`Verified ${references.length} localization key references against en.json.`)
+
+  const localeFiles = (await fs.readdir(localesDir))
+    .filter(
+      (fileName) =>
+        fileName.endsWith('.json') &&
+        fileName !== 'en.json' &&
+        !fileName.startsWith('.') &&
+        !fileName.includes('-catalog-cache')
+    )
+    .sort()
+
+  for (const fileName of localeFiles) {
+    const localeName = fileName.replace(/\.json$/, '')
+    const localeCatalogPath = path.join(localesDir, fileName)
+    const localeCatalog = JSON.parse(await fs.readFile(localeCatalogPath, 'utf8'))
+    const exitCode = verifyLocaleParity(catalog, localeName, localeCatalog)
+    if (exitCode !== 0) {
+      return exitCode
+    }
+  }
+
   return 0
 }
 
