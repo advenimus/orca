@@ -21,6 +21,11 @@ import {
   resolveCurrentWorktreeSelector
 } from '../selectors'
 import { isTuiAgent } from '../../shared/tui-agent-config'
+import {
+  assertWorkspaceTargetFlagsCompatible,
+  hasWorkspaceProjectTarget,
+  resolveProjectCreateRepoSelector
+} from '../worktree-project-target'
 
 type HookWarningResult = {
   warning?: string
@@ -148,10 +153,15 @@ function getRepoSelectorFromWorktreeSelector(selector: string | undefined): stri
   return `id:${worktreeId.slice(0, separatorIndex)}`
 }
 
-function getCreateRepoSelector(
+async function getCreateRepoSelector(
   flags: Map<string, string | boolean>,
-  cwdParentWorktree: string | undefined
-): string {
+  cwdParentWorktree: string | undefined,
+  client: Parameters<CommandHandler>[0]['client']
+): Promise<string> {
+  const projectRepoSelector = await resolveProjectCreateRepoSelector(flags, client)
+  if (projectRepoSelector) {
+    return projectRepoSelector
+  }
   const explicitRepo = getPresentStringFlag(flags, 'repo')
   if (explicitRepo) {
     return explicitRepo
@@ -194,6 +204,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree create': async ({ flags, client, cwd, json }) => {
     assertParentFlagsCompatible(flags)
+    assertWorkspaceTargetFlagsCompatible(flags)
     const callerTerminalHandle =
       typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
       process.env.ORCA_TERMINAL_HANDLE.length > 0
@@ -209,7 +220,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
     let cwdParentWorktree: string | undefined
-    if ((!explicitParentWorktree && !noParent) || !flags.has('repo')) {
+    const needsCwdRepoInference = !flags.has('repo') && !hasWorkspaceProjectTarget(flags)
+    if ((!explicitParentWorktree && !noParent) || needsCwdRepoInference) {
       try {
         // Why: agent shells can lose ORCA_TERMINAL_HANDLE while still running
         // inside an Orca worktree. Cwd keeps CLI-created children nestable and
@@ -220,7 +232,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo: getCreateRepoSelector(flags, cwdParentWorktree),
+      repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
       name: getRequiredStringFlag(flags, 'name'),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),

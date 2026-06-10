@@ -638,6 +638,153 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('resolves project and host flags to the matching repo for worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-local',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: 'repo-local',
+            path: '/tmp/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          {
+            id: 'setup-gpu',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/srv/orca/feature', 'feature', 'abc', 'repo-gpu'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'runtime:gpu',
+        '--name',
+        'feature',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-gpu',
+      name: 'feature',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      noParent: true,
+      callerTerminalHandle: undefined
+    })
+  })
+
+  it('resolves project-host-setup directly for worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-gpu',
+            projectId: 'github:stablyai/orca',
+            hostId: 'runtime:gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/srv/orca/feature', 'feature', 'abc', 'repo-gpu'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--project-host-setup',
+        'setup-gpu',
+        '--name',
+        'feature',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:repo-gpu' })
+    )
+  })
+
+  it('rejects mixing repo and project target flags on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-local',
+        '--project',
+        'github:stablyai/orca',
+        '--name',
+        'feature',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Choose either --repo or project target flags, not both.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('passes an explicit parent through worktree.create without cwd inference', async () => {
     queueFixtures(
       callMock,

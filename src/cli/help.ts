@@ -187,7 +187,7 @@ Common Commands:
   orca environment show --environment <selector> [--json]
   orca environment rm --environment <selector> [--json]
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
-  orca worktree create --name <name> [--repo <selector>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
+  orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
   orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
