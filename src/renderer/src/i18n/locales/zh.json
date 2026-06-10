@@ -16,7 +16,8 @@
         "english": "English",
         "chinese": "中文（简体）",
         "korean": "한국어",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "spanish": "Español"
       },
       "statusBar": {
         "claudeToggleDescription": "显示活动工作区的 Claude Token 和成本使用情况。",
@@ -3734,12 +3735,14 @@
               "suggestion": {
                 "toast": {
                   "670864ab52": "使本地 {{value0}} 保持最新",
-                  "84c62e4d7f": "Could not turn on {{value0}}",
-                  "442552c656": "Open Settings and try again.",
-                  "f15fd80989": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in",
-                  "3d260e1a5d": "Settings › {{value0}}",
-                  "34a03a6565": "Keep {{value0}} up to date",
-                  "4a18052018": "Local {{value0}} is behind {{value1}}"
+                  "84c62e4d7f": "无法开启 {{value0}}",
+                  "442552c656": "打开设置并重试。",
+                  "f15fd80989": "新工作树是最新的，但本地 {{value0}} 落后 {{value1}} {{value2}}，因此 AI 差异可能会与过时历史比较。让 Orca 自动保持它最新。可随时在",
+                  "3d260e1a5d": "设置 › {{value0}}",
+                  "34a03a6565": "保持 {{value0}} 最新",
+                  "4a18052018": "本地 {{value0}} 落后于 {{value1}}",
+                  "commit": "次提交",
+                  "commits": "次提交"
                 }
               }
             }
@@ -3806,8 +3809,7 @@
           "36223200ac": "OpenCode Go 会话 Cookie",
           "ea631977b5": "配置 OpenCode Go 提供商设置。",
           "4ac10b4d08": "OpenCode Go",
-          "d708749337": "。这将使用颁发给 Gemini CLI 应用的凭据，而非 Orca。若 Google 更新 CLI，可能会失效。请自行承担风险。",
-          "c2aee76420": "从本地 Gemini CLI 安装中提取 OAuth 凭据，以通过 Google 进行身份验证",
+          "c2aee76420": "从本地 Gemini CLI 安装中提取 OAuth 凭据，用于在 {{value0}} 通过 Google 进行身份验证。这将使用颁发给 Gemini CLI 应用的凭据，而非 Orca。若 Google 更新 CLI，可能会失效。请自行承担风险。",
           "96f3649526": "使用 Gemini CLI 凭据（实验）",
           "d676c41fc6": "从本地 Gemini CLI 安装中提取 OAuth 凭据以通过 Google 认证。这将使用颁发给 Gemini CLI 应用的凭据，而非 Orca。若 Google 更新 CLI，可能会失效。请自行承担风险。",
           "0c7f915b01": "使用 Gemini CLI 凭据",
@@ -3818,21 +3820,18 @@
           "3d245ef7d9": "Codex 报告此登录已过时",
           "589eba1eee": "需要重新授权",
           "e74831fb6b": "当前",
-          "d46f735a85": "。 Orca 将使用该环境的系统默认 Codex 登录信息，直到您在此处添加登录信息。",
-          "b4c9450319": "没有受管理的 Codex 账户",
+          "b4c9450319": "{{value0}} 没有受管理的 Codex 账户。Orca 将使用该环境的系统默认 Codex 登录，直到您在此处添加一个。",
           "93c47b333a": "需要登录",
           "f2a265f8c7": "系统默认",
           "b0e948a4f9": "添加账户",
-          "5568bb6d5c": "账户。新账户已添加到此处。",
-          "c0a52abfc5": "显示中",
+          "c0a52abfc5": "正在显示 {{value0}} 的账户。新账户会添加到此处。",
           "94d351af4a": "账户",
           "d0d53b7eb0": "管理 Orca 使用哪个 Codex 账户进行实时速率限制提取。",
           "3180536c7a": "Codex 账户",
           "340d6f7a85": "每个账户在 Orca 中都保留自己的本地登录上下文。账户身份验证保留在此设备上。",
           "cedfab35ab": "可选。Orca 可使用系统默认 Codex 登录；仅当你需要在 Orca 中快速切换账户时才添加账户。",
           "ef91cfa06b": "Codex",
-          "dea08560b4": "。 Orca 将使用该环境的系统默认 Claude 登录名，直到您在此处添加登录名。",
-          "3fe7862418": "没有受管理的 Claude 账户",
+          "3fe7862418": "{{value0}} 没有受管理的 Claude 账户。Orca 将使用该环境的系统默认 Claude 登录，直到您在此处添加一个。",
           "3455cf43fa": "Claude 登录。",
           "fcc4093fc1": "使用您当前 {{value0}} Codex 登录名。",
           "79e484c3b2": "用于共享 Claude 身份验证文件的可选账户切换器。",
@@ -3843,6 +3842,7 @@
           "b15ce90870": "{{value0}} -> {{value1}}。在继续旧会话之前重新启动实时 Claude 终端。",
           "f921d32606": "Claude 账户已更新。",
           "5bf8764953": "Codex 账户更新失败。",
+          "9baf45d071": "此设备",
           "2358ac71d2": "WSL 默认值",
           "ad47a33f72": "正在加载 WSL",
           "8619f9afa9": "WSL",
@@ -4886,6 +4886,12 @@
           "95a0411b3e": "模板",
           "175daba180": "例子",
           "b20c5df6ca": "添加“orca.yaml”文件以启用此存储库的共享设置、存档或议题自动化默认值。示例模板：",
+          "56f9a4a1d0": "正在使用 `orca.yaml`",
+          "623e0c9f31": "无法解析 `orca.yaml`",
+          "5a67e4793d": "未检测到 `orca.yaml`",
+          "07ba35bc68": "检查 `scripts:` 下的缩进。钩子键应使用两个空格，命令行应使用四个空格。",
+          "787ca433ef": "仅定义支持的键：`scripts`、`setup`、`archive` 和 `issueCommand`。",
+          "ecc73d9125": "将你的文件与下面可用的模板进行比较，并在需要时复制该结构。",
           "925f9e0dc4": "文本前景",
           "0cc712b823": "核心配置文件存在于存储库根目录中，但 Orca 尚无法解析支持的钩子定义。",
           "c90b858573": "文本-​​Amber-700 深色：文本-Amber-300",
@@ -5184,7 +5190,11 @@
           "fac59213fc": "搜索内置主题",
           "cb330ef7f8": "{{value0}} 的",
           "c822571b2e": "匹配“{{value0}}”",
-          "3119c012a5": "字符串"
+          "3119c012a5": "字符串",
+          "builtin_themes": "Built-in",
+          "imported_from": "Imported from {{value0}}",
+          "imported_themes": "Imported",
+          "search_terminal_themes": "Search terminal themes"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -5561,7 +5571,9 @@
           "b739d2abfe": "深色分隔线颜色",
           "7add204bd5": "选择深色模式下使用的终端主题。",
           "9499ad1dc4": "黑暗主题",
-          "f012172e21": "选择深色模式下用于终端窗格的主题。"
+          "f012172e21": "选择深色模式下用于终端窗格的主题。",
+          "import_themes_title": "Import Themes",
+          "import_themes_description": "Imported themes are available in both the dark and light theme pickers."
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 洋红色",
@@ -6399,7 +6411,7 @@
             "28192e3a63": "掌握",
             "e3e9adde59": "主要的",
             "0e993bf00f": "当您创建工作区时，Orca 会刷新远程库并安全地快进匹配的本地分支，例如 main 或 master。这使得像 git diff main...HEAD 这样的命令无法与过时的历史记录进行比较。如果该分支有未提交的更改或仅限本地提交，Orca 会跳过更新。",
-            "f8bda25f29": "保持本地主要更新",
+            "f8bda25f29": "保持本地 main 最新",
             "769ddd7f81": "风俗",
             "1d2fae1fa2": "git 用户名",
             "f83c8937c4": "分支命名",
@@ -7096,7 +7108,20 @@
             "e989914ad6": "字体家族",
             "33031c1465": "文字大小",
             "0fe0073f0c": "新窗格和实时更新的默认终端字体大小。",
-            "5930244899": "字体大小"
+            "5930244899": "字体大小",
+            "warp_import": {
+              "title": "Import themes from Warp",
+              "description": "Import Warp themes as Orca terminal themes.",
+              "keyword_warp": "warp",
+              "keyword_themes": "themes",
+              "keyword_yaml": "yaml"
+            },
+            "yaml_import": {
+              "title": "Import from YAML",
+              "description": "Import theme YAML files as Orca terminal themes.",
+              "keyword_yaml": "yaml",
+              "keyword_custom": "custom"
+            }
           },
           "windows": {
             "search": {
@@ -7200,13 +7225,49 @@
                 "to": {
                   "date": {
                     "setting": {
-                      "f8bda25f29": "Keep Local Main Up to Date"
+                      "f8bda25f29": "保持本地 main 最新"
                     }
                   }
                 }
               }
             }
           }
+        },
+        "WarpThemeImportModal": {
+          "title": "Import themes from Warp",
+          "description": "Import Warp themes as Orca terminal themes.",
+          "yaml_title": "Import theme YAML",
+          "yaml_description": "Import theme YAML files (Warp format) as Orca terminal themes.",
+          "yaml_no_themes_found": "No themes found in the selected files.",
+          "choose_file": "Choose File",
+          "choose_folder": "Choose Folder",
+          "loading": "Loading Warp themes...",
+          "found_theme_one": "Found 1 theme",
+          "found_theme_other": "Found {{value0}} themes",
+          "found_in_source": " in {{value0}}",
+          "clear_all": "Clear all",
+          "select_all": "Select all",
+          "colors_only": "Colors only",
+          "no_themes_found": "No custom Warp themes found.",
+          "builtin_themes_hint": "Warp's preloaded themes are part of the Warp app and can't be read from disk. Orca already includes most of them, like Dracula, Gruvbox, Solarized, and Tokyo Night.",
+          "choose_manually": "Choose a theme YAML file or folder to import manually.",
+          "skipped_files": "Skipped files",
+          "more_skipped_files": "{{value0}} more skipped files.",
+          "cancel": "Cancel",
+          "import_theme_one": "Import 1 Theme",
+          "import_theme_other": "Import {{value0}} Themes",
+          "import_themes": "Import Themes"
+        },
+        "useWarpThemeImport": {
+          "unknown_error": "Unknown error",
+          "imported_one": "Imported 1 theme",
+          "imported_other": "Imported {{value0}} themes",
+          "import_failed": "Failed to import themes",
+          "over_limit_one": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect 1 new theme and try again.",
+          "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
+        },
+        "YamlThemeImportButton": {
+          "label": "Import from YAML"
         }
       },
       "right": {
@@ -9481,7 +9542,7 @@
             "05e675fe96": "隐藏提示",
             "77351d22f5": "浏览器设置",
             "e0e125e074": "从文件...",
-            "0c6d254eca": "从",
+            "0c6d254eca": "从 {{value0}}",
             "244266c122": "导入…",
             "e52a955e6f": "您始终可以在“设置”>“浏览器”中找到它。",
             "4f5ffaa6a1": "导入浏览器数据",

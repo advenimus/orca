@@ -16,7 +16,8 @@
         "english": "English",
         "chinese": "中文（简体）",
         "korean": "한국어",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "spanish": "Español"
       },
       "statusBar": {
         "claudeToggleDescription": "활성 워크스페이스에 대한 Claude 토큰 및 비용 사용량을 표시합니다.",
@@ -3734,12 +3735,14 @@
               "suggestion": {
                 "toast": {
                   "670864ab52": "로컬 {{value0}}을 최신 상태로 유지",
-                  "84c62e4d7f": "Could not turn on {{value0}}",
-                  "442552c656": "Open Settings and try again.",
-                  "f15fd80989": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in",
-                  "3d260e1a5d": "Settings › {{value0}}",
-                  "34a03a6565": "Keep {{value0}} up to date",
-                  "4a18052018": "Local {{value0}} is behind {{value1}}"
+                  "84c62e4d7f": "{{value0}}을(를) 켤 수 없습니다.",
+                  "442552c656": "설정을 열고 다시 시도하세요.",
+                  "f15fd80989": "새 워크트리는 최신 상태이지만 로컬 {{value0}}이(가) {{value1}} {{value2}} 뒤처져 있어 AI diff가 오래된 기록과 비교될 수 있습니다. Orca가 자동으로 최신 상태를 유지하도록 하세요. 언제든지 여기에서 변경할 수 있습니다",
+                  "3d260e1a5d": "설정 › {{value0}}",
+                  "34a03a6565": "{{value0}} 최신 상태로 유지",
+                  "4a18052018": "로컬 {{value0}}이(가) {{value1}}보다 뒤처져 있습니다",
+                  "commit": "커밋",
+                  "commits": "커밋"
                 }
               }
             }
@@ -3806,8 +3809,7 @@
           "36223200ac": "OpenCode Go 세션 쿠키",
           "ea631977b5": "OpenCode Go 공급자 설정을 구성합니다.",
           "4ac10b4d08": "OpenCode Go",
-          "d708749337": ". 이는 Orca가 아닌 Gemini CLI 앱에 발급된 자격 증명을 사용합니다. Google이 CLI를 업데이트하면 중단될 수 있습니다. 자신의 책임하에 사용하십시오.",
-          "c2aee76420": "Google에 인증하기 위해 로컬 Gemini CLI 설치에서 OAuth 자격 증명을 추출합니다.",
+          "c2aee76420": "{{value0}}에서 Google에 인증하기 위해 로컬 Gemini CLI 설치에서 OAuth 자격 증명을 추출합니다. 이는 Orca가 아닌 Gemini CLI 앱에 발급된 자격 증명을 사용합니다. Google이 CLI를 업데이트하면 중단될 수 있습니다. 자신의 책임하에 사용하십시오.",
           "96f3649526": "Gemini CLI 자격 증명 사용(실험적)",
           "d676c41fc6": "Google 인증을 위해 로컬 Gemini CLI 설치에서 OAuth 자격 증명을 추출합니다. 이는 Orca가 아닌 Gemini CLI 앱에 발급된 자격 증명을 사용합니다. Google이 CLI를 업데이트하면 중단될 수 있습니다. 자신의 책임하에 사용하십시오.",
           "0c7f915b01": "Gemini CLI 자격 증명 사용",
@@ -3818,21 +3820,18 @@
           "3d245ef7d9": "Codex에서 이 로그인이 오래되었다고 보고했습니다.",
           "589eba1eee": "재인증 필요",
           "e74831fb6b": "활성",
-          "d46f735a85": ". Orca는 여기에 추가할 때까지 해당 환경의 시스템 기본 Codex 로그인을 사용합니다.",
-          "b4c9450319": "다음에 대한 관리되는 Codex 계정이 없습니다.",
+          "b4c9450319": "{{value0}}에 대한 관리되는 Codex 계정이 없습니다. Orca는 여기에 추가할 때까지 해당 환경의 시스템 기본 Codex 로그인을 사용합니다.",
           "93c47b333a": "로그인 필요",
           "f2a265f8c7": "시스템 기본값",
           "b0e948a4f9": "계정 추가",
-          "5568bb6d5c": "계정. 여기에 새 계정이 추가됩니다.",
-          "c0a52abfc5": "표시 중",
+          "c0a52abfc5": "{{value0}} 계정을 표시 중입니다. 새 계정은 여기에 추가됩니다.",
           "94d351af4a": "계정",
           "d0d53b7eb0": "Orca가 실시간 속도 제한 가져오기에 사용하는 Codex 계정을 관리합니다.",
           "3180536c7a": "Codex 계정",
           "340d6f7a85": "각 계정은 Orca에서 자체 로컬 로그인 컨텍스트를 유지합니다. 계정 인증은 이 기기에 유지됩니다.",
           "cedfab35ab": "선택 사항. Orca는 일반 Codex 로그인을 사용할 수 있습니다. Orca에서 빠른 전환을 원하는 경우에만 계정을 추가하세요.",
           "ef91cfa06b": "Codex",
-          "dea08560b4": ". Orca는 여기에 로그인을 추가할 때까지 해당 환경의 시스템 기본 Claude 로그인을 사용합니다.",
-          "3fe7862418": "다음에 대한 관리된 Claude 계정이 없습니다.",
+          "3fe7862418": "{{value0}}에 대한 관리된 Claude 계정이 없습니다. Orca는 여기에 추가할 때까지 해당 환경의 시스템 기본 Claude 로그인을 사용합니다.",
           "3455cf43fa": "Claude 로그인.",
           "fcc4093fc1": "현재 {{value0}} Codex 로그인을 사용하세요.",
           "79e484c3b2": "공유 Claude 인증 파일에 대한 선택적 계정 전환기입니다.",
@@ -3843,6 +3842,7 @@
           "b15ce90870": "{{value0}} -> {{value1}}. 이전 세션을 계속하기 전에 라이브 Claude 터미널을 다시 시작하십시오.",
           "f921d32606": "Claude 계정이 업데이트되었습니다.",
           "5bf8764953": "Codex 계정 업데이트에 실패했습니다.",
+          "9baf45d071": "이 기기",
           "2358ac71d2": "WSL 기본값",
           "ad47a33f72": "WSL 로드 중",
           "8619f9afa9": "WSL",
@@ -4886,6 +4886,12 @@
           "95a0411b3e": "주형",
           "175daba180": "예",
           "b20c5df6ca": "이 저장소에 대한 공유 설정, 아카이브 또는 발행 자동화 기본값을 활성화하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:",
+          "56f9a4a1d0": "`orca.yaml` 사용 중",
+          "623e0c9f31": "`orca.yaml`을 구문 분석할 수 없습니다",
+          "5a67e4793d": "`orca.yaml`을 찾을 수 없습니다",
+          "07ba35bc68": "`scripts:` 아래의 들여쓰기를 확인하세요. 후크 키는 두 칸, 명령 줄은 네 칸을 사용해야 합니다.",
+          "787ca433ef": "지원되는 키만 정의하세요: `scripts`, `setup`, `archive`, `issueCommand`.",
+          "ecc73d9125": "아래의 작동하는 템플릿과 비교하고 필요한 경우 그 형식을 복사하세요.",
           "925f9e0dc4": "텍스트 전경",
           "0cc712b823": "핵심 구성 파일이 저장소 루트에 있지만 Orca가 아직 지원되는 후크 정의를 구문 분석할 수 없습니다.",
           "c90b858573": "텍스트-호박-700 어두움:텍스트-호박-300",
@@ -5184,7 +5190,11 @@
           "fac59213fc": "내장 테마 검색",
           "cb330ef7f8": "{{value0}} 중",
           "c822571b2e": "\"{{value0}}\"과 일치",
-          "3119c012a5": "문자열"
+          "3119c012a5": "문자열",
+          "builtin_themes": "Built-in",
+          "imported_from": "Imported from {{value0}}",
+          "imported_themes": "Imported",
+          "search_terminal_themes": "Search terminal themes"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -5561,7 +5571,9 @@
           "b739d2abfe": "다크 디바이더 색상",
           "7add204bd5": "다크 모드에서 사용되는 터미널 테마를 선택하세요.",
           "9499ad1dc4": "어두운 테마",
-          "f012172e21": "어두운 모드에서 터미널 패널에 사용되는 테마를 선택합니다."
+          "f012172e21": "어두운 모드에서 터미널 패널에 사용되는 테마를 선택합니다.",
+          "import_themes_title": "Import Themes",
+          "import_themes_description": "Imported themes are available in both the dark and light theme pickers."
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 마젠타색",
@@ -7096,7 +7108,20 @@
             "e989914ad6": "글꼴군",
             "33031c1465": "텍스트 크기",
             "0fe0073f0c": "새 창 및 라이브 업데이트의 기본 터미널 글꼴 크기입니다.",
-            "5930244899": "글꼴 크기"
+            "5930244899": "글꼴 크기",
+            "warp_import": {
+              "title": "Import themes from Warp",
+              "description": "Import Warp themes as Orca terminal themes.",
+              "keyword_warp": "warp",
+              "keyword_themes": "themes",
+              "keyword_yaml": "yaml"
+            },
+            "yaml_import": {
+              "title": "Import from YAML",
+              "description": "Import theme YAML files as Orca terminal themes.",
+              "keyword_yaml": "yaml",
+              "keyword_custom": "custom"
+            }
           },
           "windows": {
             "search": {
@@ -7200,13 +7225,49 @@
                 "to": {
                   "date": {
                     "setting": {
-                      "f8bda25f29": "Keep Local Main Up to Date"
+                      "f8bda25f29": "로컬 main을 최신 상태로 유지"
                     }
                   }
                 }
               }
             }
           }
+        },
+        "WarpThemeImportModal": {
+          "title": "Import themes from Warp",
+          "description": "Import Warp themes as Orca terminal themes.",
+          "yaml_title": "Import theme YAML",
+          "yaml_description": "Import theme YAML files (Warp format) as Orca terminal themes.",
+          "yaml_no_themes_found": "No themes found in the selected files.",
+          "choose_file": "Choose File",
+          "choose_folder": "Choose Folder",
+          "loading": "Loading Warp themes...",
+          "found_theme_one": "Found 1 theme",
+          "found_theme_other": "Found {{value0}} themes",
+          "found_in_source": " in {{value0}}",
+          "clear_all": "Clear all",
+          "select_all": "Select all",
+          "colors_only": "Colors only",
+          "no_themes_found": "No custom Warp themes found.",
+          "builtin_themes_hint": "Warp's preloaded themes are part of the Warp app and can't be read from disk. Orca already includes most of them, like Dracula, Gruvbox, Solarized, and Tokyo Night.",
+          "choose_manually": "Choose a theme YAML file or folder to import manually.",
+          "skipped_files": "Skipped files",
+          "more_skipped_files": "{{value0}} more skipped files.",
+          "cancel": "Cancel",
+          "import_theme_one": "Import 1 Theme",
+          "import_theme_other": "Import {{value0}} Themes",
+          "import_themes": "Import Themes"
+        },
+        "useWarpThemeImport": {
+          "unknown_error": "Unknown error",
+          "imported_one": "Imported 1 theme",
+          "imported_other": "Imported {{value0}} themes",
+          "import_failed": "Failed to import themes",
+          "over_limit_one": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect 1 new theme and try again.",
+          "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
+        },
+        "YamlThemeImportButton": {
+          "label": "Import from YAML"
         }
       },
       "right": {
@@ -9481,7 +9542,7 @@
             "05e675fe96": "힌트 숨기기",
             "77351d22f5": "브라우저 설정",
             "e0e125e074": "파일에서…",
-            "0c6d254eca": "에서",
+            "0c6d254eca": "{{value0}}에서",
             "244266c122": "수입…",
             "e52a955e6f": "언제든지 설정 > 브라우저에서 찾을 수 있습니다.",
             "4f5ffaa6a1": "브라우저 데이터 가져오기",

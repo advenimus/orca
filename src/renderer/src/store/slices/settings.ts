@@ -17,6 +17,7 @@ import {
 } from '@/runtime/runtime-terminal-stream'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
+import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
@@ -279,6 +280,11 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
           updates.terminalQuickCommands
         )
       }
+      if ('terminalCustomThemes' in updates) {
+        sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
+          updates.terminalCustomThemes
+        )
+      }
       if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
         const taskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders:
@@ -321,7 +327,12 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       return true
     }
     if (hasUnsavedEditorState(get())) {
-      toast.error(translate("auto.store.slices.settings.faa8fb83dd", "Save or close unsaved editor tabs before switching servers."))
+      toast.error(
+        translate(
+          'auto.store.slices.settings.faa8fb83dd',
+          'Save or close unsaved editor tabs before switching servers.'
+        )
+      )
       return false
     }
     try {
@@ -354,7 +365,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       return true
     } catch (err) {
       console.error('Failed to switch runtime environment:', err)
-      toast.error(translate("auto.store.slices.settings.e12dab333b", "Failed to switch servers"), {
+      toast.error(translate('auto.store.slices.settings.e12dab333b', 'Failed to switch servers'), {
         description: err instanceof Error ? err.message : String(err)
       })
       return false

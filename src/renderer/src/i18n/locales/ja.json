@@ -16,7 +16,8 @@
         "english": "English",
         "chinese": "中文（简体）",
         "korean": "한국어",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "spanish": "Español"
       },
       "statusBar": {
         "claudeToggleDescription": "アクティブなワークスペースのClaude トークンとコストの使用状況を表示します。",
@@ -3734,12 +3735,14 @@
               "suggestion": {
                 "toast": {
                   "670864ab52": "ローカル {{value0}} を最新の状態に保つ",
-                  "84c62e4d7f": "Could not turn on {{value0}}",
-                  "442552c656": "Open Settings and try again.",
-                  "f15fd80989": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in",
-                  "3d260e1a5d": "Settings › {{value0}}",
-                  "34a03a6565": "Keep {{value0}} up to date",
-                  "4a18052018": "Local {{value0}} is behind {{value1}}"
+                  "84c62e4d7f": "{{value0}} をオンにできませんでした",
+                  "442552c656": "設定を開いてもう一度お試しください。",
+                  "f15fd80989": "新しいワークツリーは最新ですが、ローカル {{value0}} は {{value1}} {{value2}} 遅れているため、AI diff が古い履歴と比較する可能性があります。Orca が自動で最新状態を保つようにできます。これはいつでもここで変更できます",
+                  "3d260e1a5d": "設定 › {{value0}}",
+                  "34a03a6565": "{{value0}} を最新の状態に保つ",
+                  "4a18052018": "ローカル {{value0}} は {{value1}} より遅れています",
+                  "commit": "コミット",
+                  "commits": "コミット"
                 }
               }
             }
@@ -3806,8 +3809,7 @@
           "36223200ac": "OpenCode Go セッション Cookie",
           "ea631977b5": "OpenCode Go プロバイダー設定を構成します。",
           "4ac10b4d08": "OpenCode Go",
-          "d708749337": "。これは、Orca ではなく、Gemini CLI アプリに発行された認証情報を使用します。 Google が CLI を更新すると壊れる可能性があります。ご自身の責任でご使用ください。",
-          "c2aee76420": "ローカルの Gemini CLI インストールから OAuth 認証情報を抽出して、Google で認証します。",
+          "c2aee76420": "ローカルの Gemini CLI インストールから OAuth 認証情報を抽出し、{{value0}} の Google 認証に使用します。これは、Orca ではなく、Gemini CLI アプリに発行された認証情報を使用します。Google が CLI を更新すると壊れる可能性があります。ご自身の責任でご使用ください。",
           "96f3649526": "Gemini CLI 認証情報を使用する (実験的機能)",
           "d676c41fc6": "ローカルの Gemini CLI インストールから OAuth 認証情報を抽出して、Google で認証します。これは、Orca ではなく、Gemini CLI アプリに発行された認証情報を使用します。 Google が CLI を更新すると壊れる可能性があります。ご自身の責任でご使用ください。",
           "0c7f915b01": "Gemini CLI 認証情報を使用する",
@@ -3818,21 +3820,18 @@
           "3d245ef7d9": "Codex はこのサインインが古いと報告しました",
           "589eba1eee": "再認証が必要です",
           "e74831fb6b": "アクティブ",
-          "d46f735a85": "。ここで追加するまで、Orca はその環境のシステムのデフォルトの Codex ログインを使用します。",
-          "b4c9450319": "管理対象の Codex アカウントがありません",
+          "b4c9450319": "{{value0}} の管理対象 Codex アカウントはありません。ここで追加するまで、Orca はその環境のシステムデフォルトの Codex ログインを使用します。",
           "93c47b333a": "サインインが必要です",
           "f2a265f8c7": "システムのデフォルト",
           "b0e948a4f9": "アカウントの追加",
-          "5568bb6d5c": "アカウント。そこに新規アカウントが追加されます。",
-          "c0a52abfc5": "表示中",
+          "c0a52abfc5": "{{value0}} のアカウントを表示中です。新規アカウントはそこに追加されます。",
           "94d351af4a": "アカウント",
           "d0d53b7eb0": "Orca がライブ レート制限の取得に使用する Codex アカウントを管理します。",
           "3180536c7a": "Codexアカウント",
           "340d6f7a85": "各アカウントは、Orca で独自のローカル サインイン コンテキストを保持します。アカウント認証はこのデバイスに残ります。",
           "cedfab35ab": "オプション。 Orca は通常の Codex ログインを使用できます。 Orca で素早く切り替えたい場合にのみアカウントを追加。",
           "ef91cfa06b": "Codex",
-          "dea08560b4": "。ここで追加するまで、Orca はその環境のシステムのデフォルトのClaude ログインを使用します。",
-          "3fe7862418": "管理対象の Claude アカウントはありません",
+          "3fe7862418": "{{value0}} の管理対象 Claude アカウントはありません。ここで追加するまで、Orca はその環境のシステムデフォルトの Claude ログインを使用します。",
           "3455cf43fa": "Claudeのログイン。",
           "fcc4093fc1": "現在の {{value0}} Codex ログインを使用します。",
           "79e484c3b2": "共有Claude認証ファイル用のオプションのアカウント スイッチャー。",
@@ -3843,6 +3842,7 @@
           "b15ce90870": "{{value0}} -> {{value1}}。古いセッションを続行する前に、ライブ Claude ターミナルを再起動します。",
           "f921d32606": "Claudeアカウントが更新されました。",
           "5bf8764953": "Codex アカウントの更新に失敗しました。",
+          "9baf45d071": "このデバイス",
           "2358ac71d2": "WSLのデフォルト",
           "ad47a33f72": "WSLの読み込み中",
           "8619f9afa9": "WSL",
@@ -4402,6 +4402,42 @@
           "273e7e81fe": "構成",
           "1f744a72f4": "構成"
         },
+        "WarpThemeImportModal": {
+          "title": "Warp からテーマをインポート",
+          "description": "Warp テーマを Orca のターミナルテーマとしてインポートします。",
+          "yaml_title": "テーマ YAML をインポート",
+          "yaml_description": "テーマ YAML ファイル（Warp 形式）を Orca のターミナルテーマとしてインポートします。",
+          "yaml_no_themes_found": "選択したファイルにテーマが見つかりませんでした。",
+          "choose_file": "ファイルを選択",
+          "choose_folder": "フォルダーを選択",
+          "loading": "Warp テーマを読み込み中...",
+          "found_theme_one": "1 件のテーマが見つかりました",
+          "found_theme_other": "{{value0}} 件のテーマが見つかりました",
+          "found_in_source": "（{{value0}}）",
+          "clear_all": "すべてクリア",
+          "select_all": "すべて選択",
+          "colors_only": "カラーのみ",
+          "no_themes_found": "カスタム Warp テーマが見つかりませんでした。",
+          "builtin_themes_hint": "Warp のプリロードテーマは Warp アプリ本体に含まれており、ディスクから読み取ることはできません。Dracula、Gruvbox、Solarized、Tokyo Night など、その多くは Orca の組み込みテーマとして既に利用できます。",
+          "choose_manually": "テーマ YAML ファイルまたはフォルダーを選択して手動でインポートします。",
+          "skipped_files": "スキップされたファイル",
+          "more_skipped_files": "他 {{value0}} 件のファイルがスキップされました。",
+          "cancel": "キャンセル",
+          "import_theme_one": "1 件のテーマをインポート",
+          "import_theme_other": "{{value0}} 件のテーマをインポート",
+          "import_themes": "テーマをインポート"
+        },
+        "useWarpThemeImport": {
+          "unknown_error": "不明なエラー",
+          "imported_one": "1 件のテーマをインポートしました",
+          "imported_other": "{{value0}} 件のテーマをインポートしました",
+          "import_failed": "テーマのインポートに失敗しました",
+          "over_limit_one": "これらのテーマをインポートすると、カスタムターミナルテーマの上限（{{value0}} 件）を超えます。新しいテーマを 1 件選択解除して、もう一度お試しください。",
+          "over_limit_other": "これらのテーマをインポートすると、カスタムターミナルテーマの上限（{{value0}} 件）を超えます。新しいテーマを {{value1}} 件選択解除して、もう一度お試しください。"
+        },
+        "YamlThemeImportButton": {
+          "label": "YAML からインポート"
+        },
         "GitPane": {
           "d2eede4c54": "Orca の帰属をコミット、PR、イシューに追加します。",
           "e02ea23a32": "Orcaの帰属",
@@ -4886,6 +4922,12 @@
           "95a0411b3e": "テンプレート",
           "175daba180": "例",
           "b20c5df6ca": "「orca.yaml」ファイルを追加して、このリポジトリの共有セットアップ、アーカイブ、またはイシュー自動化のデフォルトを有効にします。テンプレートの例:",
+          "56f9a4a1d0": "`orca.yaml` を使用中",
+          "623e0c9f31": "`orca.yaml` を解析できませんでした",
+          "5a67e4793d": "`orca.yaml` が見つかりません",
+          "07ba35bc68": "`scripts:` の下のインデントを確認してください。フックキーは2スペース、コマンド行は4スペースにします。",
+          "787ca433ef": "サポートされているキーのみを定義してください: `scripts`、`setup`、`archive`、`issueCommand`。",
+          "ecc73d9125": "下の動作するテンプレートと比較し、必要に応じてその形式をコピーしてください。",
           "925f9e0dc4": "テキスト前景",
           "0cc712b823": "コア構成ファイルはリポジトリ ルートに存在しますが、Orca はサポートされているフック定義をまだ解析できませんでした。",
           "c90b858573": "テキスト-アンバー-700 ダーク:テキスト-アンバー-300",
@@ -5177,11 +5219,15 @@
           "74bcecd5ec": "クリア",
           "a4ff6143f8": "フォントの選択をクリア",
           "b661b034ec": "・ デフォルト：",
+          "builtin_themes": "組み込み",
           "ceefb9d7f1": "テーマが見つかりませんでした。",
+          "imported_from": "{{value0}} からインポート",
+          "imported_themes": "インポート済み",
           "9119fb2268": "現在",
           "4e11f87ca6": "表示中",
           "fbb428db98": "選択済み:",
           "fac59213fc": "組み込みテーマを検索する",
+          "search_terminal_themes": "ターミナルテーマを検索",
           "cb330ef7f8": "{{value0}}の",
           "c822571b2e": "「{{value0}}」に一致",
           "3119c012a5": "文字列"
@@ -5548,6 +5594,8 @@
           "d06664e889": "ダーク"
         },
         "TerminalThemeSections": {
+          "import_themes_title": "テーマをインポート",
+          "import_themes_description": "インポートしたテーマは、ダークとライト両方のテーマピッカーで利用できます。",
           "db210115c5": "ライトモードのプレビュー",
           "5e0c24b5c8": "ライト モードでペイン間の分割分割線を制御します。",
           "ec2e33ad80": "ライトディバイダーの色",
@@ -6996,6 +7044,19 @@
             "82b63d07fe": "幽霊っぽい",
             "73e9422f19": "サポートされている Ghostty ターミナル設定の 1 回限りのインポート。",
             "a979df0083": "Ghostty からインポート",
+            "warp_import": {
+              "title": "Warp からテーマをインポート",
+              "description": "Warp テーマを Orca のターミナルテーマとしてインポートします。",
+              "keyword_warp": "warp",
+              "keyword_themes": "テーマ",
+              "keyword_yaml": "yaml"
+            },
+            "yaml_import": {
+              "title": "YAML からインポート",
+              "description": "テーマ YAML ファイルを Orca のターミナルテーマとしてインポートします。",
+              "keyword_yaml": "yaml",
+              "keyword_custom": "カスタム"
+            },
             "4cec42dbf7": "国際",
             "b495dc6a9f": "JIS",
             "d8d6f7a3c5": "マコス",
@@ -7200,7 +7261,7 @@
                 "to": {
                   "date": {
                     "setting": {
-                      "f8bda25f29": "Keep Local Main Up to Date"
+                      "f8bda25f29": "ローカル main を最新の状態に保つ"
                     }
                   }
                 }
@@ -9481,7 +9542,7 @@
             "05e675fe96": "ヒントを隠す",
             "77351d22f5": "ブラウザの設定",
             "e0e125e074": "ファイルから…",
-            "0c6d254eca": "から",
+            "0c6d254eca": "{{value0}} から",
             "244266c122": "輸入…",
             "e52a955e6f": "これは、[設定] > [ブラウザ] でいつでも見つけることができます。",
             "4f5ffaa6a1": "ブラウザデータをインポートする",
