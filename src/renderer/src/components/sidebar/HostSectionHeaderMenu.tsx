@@ -198,6 +198,10 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
                 'Host actions for {{value0}}',
                 { value0: row.label }
               )}
+              // Why: the host header row itself toggles collapse on click;
+              // opening the menu must not also fold the section.
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
             >
               {busy ? (
                 <Loader2 className="size-3.5 animate-spin" />

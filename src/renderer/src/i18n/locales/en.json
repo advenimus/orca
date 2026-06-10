@@ -3343,6 +3343,9 @@
         "sidebarHostOptions": {
           "3e102f111c": "All hosts"
         },
+        "SidebarHostScopeStrip": {
+          "connectedCount": "{{value0}} connected"
+        },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent activity layout",
           "3d4b9c4997": "Hover",

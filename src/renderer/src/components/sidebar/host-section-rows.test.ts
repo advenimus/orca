@@ -233,8 +233,9 @@ describe('addHostSectionRows', () => {
   })
 
   it('carries the SSH connection status through to the host header row', () => {
+    const local = repo('local')
     const ssh = repo('ssh', 'ssh-1')
-    const rows = [repoHeader(ssh), item('ssh-wt', ssh)]
+    const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
     const sectioned = addHostSectionRows({
       rows,
@@ -259,17 +260,24 @@ describe('addHostSectionRows', () => {
       defaultHostId: 'local'
     })
 
-    expect(sectioned[0]).toMatchObject({
-      type: 'host-header',
-      hostId: 'ssh:ssh-1',
+    expect(
+      sectioned.find((row) => row.type === 'host-header' && row.hostId === 'ssh:ssh-1')
+    ).toMatchObject({
       health: 'error',
-      connectionStatus: 'auth-failed'
+      connectionStatus: 'auth-failed',
+      collapsed: false
     })
   })
 
   it('uses the focused runtime as the owner for non-SSH repos', () => {
+    const localOwned: Repo = { ...repo('local-project'), executionHostId: 'local' }
     const project = repo('runtime-project')
-    const rows = [repoHeader(project), item('runtime-wt', project)]
+    const rows = [
+      repoHeader(localOwned),
+      item('local-wt', localOwned),
+      repoHeader(project),
+      item('runtime-wt', project)
+    ]
 
     const sectioned = addHostSectionRows({
       rows,
@@ -293,16 +301,23 @@ describe('addHostSectionRows', () => {
       defaultHostId: 'runtime:env-1'
     })
 
-    expect(sectioned[0]).toMatchObject({
-      type: 'host-header',
+    expect(
+      sectioned.find((row) => row.type === 'host-header' && row.hostId === 'runtime:env-1')
+    ).toMatchObject({
       key: 'host:runtime:env-1',
       label: 'env-1'
     })
   })
 
   it('passes host kind and blocked compatibility through to the header row', () => {
+    const localOwned: Repo = { ...repo('local-project'), executionHostId: 'local' }
     const project = repo('runtime-project')
-    const rows = [repoHeader(project), item('runtime-wt', project)]
+    const rows = [
+      repoHeader(localOwned),
+      item('local-wt', localOwned),
+      repoHeader(project),
+      item('runtime-wt', project)
+    ]
 
     const sectioned = addHostSectionRows({
       rows,
@@ -333,11 +348,76 @@ describe('addHostSectionRows', () => {
       defaultHostId: 'runtime:env-1'
     })
 
-    expect(sectioned[0]).toMatchObject({
-      type: 'host-header',
+    expect(
+      sectioned.find((row) => row.type === 'host-header' && row.hostId === 'runtime:env-1')
+    ).toMatchObject({
       kind: 'runtime',
       health: 'blocked',
       compatibility: { kind: 'blocked', reason: 'server-too-old' }
     })
+  })
+
+  it('suppresses host headers when only one host has visible workspaces', () => {
+    const local = repo('local')
+    const rows = [repoHeader(local), item('local-wt', local)]
+
+    const sectioned = addHostSectionRows({
+      rows,
+      hostOptions: [
+        {
+          id: 'local',
+          kind: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          health: 'local'
+        },
+        { id: 'ssh:ssh-1', kind: 'ssh', label: 'Builder', detail: 'SSH', health: 'disconnected' },
+        {
+          id: 'runtime:env-1',
+          kind: 'runtime',
+          label: 'env-1',
+          detail: 'Orca server',
+          health: 'available'
+        }
+      ],
+      workspaceHostScope: 'all',
+      defaultHostId: 'local'
+    })
+
+    expect(sectioned).toEqual(rows)
+  })
+
+  it('keeps a collapsed host header but hides its rows', () => {
+    const local = repo('local')
+    const ssh = repo('ssh', 'ssh-1')
+    const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
+
+    const sectioned = addHostSectionRows({
+      rows,
+      hostOptions: [
+        {
+          id: 'local',
+          kind: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          health: 'local'
+        },
+        { id: 'ssh:ssh-1', kind: 'ssh', label: 'Builder', detail: 'SSH', health: 'available' }
+      ],
+      workspaceHostScope: 'all',
+      defaultHostId: 'local',
+      collapsedHostKeys: new Set(['host:ssh:ssh-1'])
+    })
+
+    expect(sectioned.map(rowKey)).toEqual([
+      'host:local',
+      'repo:local',
+      'local-wt',
+      'host:ssh:ssh-1'
+    ])
+    expect(sectioned.filter((row) => row.type === 'host-header')).toMatchObject([
+      { hostId: 'local', collapsed: false },
+      { hostId: 'ssh:ssh-1', collapsed: true, count: 1 }
+    ])
   })
 })

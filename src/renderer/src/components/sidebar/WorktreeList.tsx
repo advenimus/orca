@@ -515,35 +515,51 @@ function getHostHeaderDetail(row: HostHeaderRow): { text: string; isWarning: boo
   return { text: row.detail, isWarning: false }
 }
 
-function HostSectionHeader({ row }: { row: HostHeaderRow }): React.JSX.Element {
-  const isBlocked = row.health === 'blocked'
+function HostSectionHeader({
+  row,
+  onToggle
+}: {
+  row: HostHeaderRow
+  onToggle: () => void
+}): React.JSX.Element {
   const detail = getHostHeaderDetail(row)
   return (
     <div className="px-2 pt-1">
+      {/* Why: host headers are group labels, not cards — they must read as a
+          lighter tier than the host scope strip above, mirroring the other
+          sidebar group headers (clickable row, hover chevron, same type). */}
       <div
-        className={cn(
-          'group/host-header flex h-7 items-center gap-2 rounded-md border px-2 text-left',
-          isBlocked
-            ? 'border-destructive/40 bg-destructive/10'
-            : 'border-worktree-sidebar-border bg-worktree-sidebar-accent/70'
-        )}
+        role="button"
+        tabIndex={0}
+        aria-expanded={!row.collapsed}
+        className="group/host-header flex h-7 w-full cursor-pointer items-center gap-1.5 pr-1 text-left"
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggle()
+          }
+        }}
       >
         <Server className="size-3.5 shrink-0 text-muted-foreground" />
         <HostHeaderHealthIcon health={row.health} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[12px] font-semibold leading-none text-foreground">
-            {row.label}
-          </div>
-          <div
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div className="min-w-0 truncate text-[13px] font-semibold leading-none">{row.label}</div>
+          <span
             className={cn(
-              'mt-0.5 truncate text-[10px] leading-none',
-              detail.isWarning ? 'text-destructive' : 'text-muted-foreground'
+              'shrink-0 truncate text-[10px] leading-none',
+              detail.isWarning ? 'text-destructive' : 'text-muted-foreground/70'
             )}
           >
             {detail.text}
-          </div>
+          </span>
+          <SectionMetricsBadge count={row.count} />
         </div>
-        <SectionMetricsBadge count={row.count} />
+        <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 opacity-0 transition-opacity group-hover/host-header:opacity-100">
+          <ChevronDown
+            className={cn('size-3.5 transition-transform', row.collapsed && '-rotate-90')}
+          />
+        </div>
         <HostSectionHeaderMenu row={row} />
       </div>
     </div>
@@ -2871,7 +2887,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       : { transform: getVirtualRowTransform(vItem.start) }
                   }
                 >
-                  <HostSectionHeader row={row} />
+                  <HostSectionHeader
+                    row={row}
+                    onToggle={() => toggleGroupWithScrollAnchor(row.key)}
+                  />
                 </div>
               )
             }
@@ -4179,9 +4198,10 @@ const WorktreeList = React.memo(function WorktreeList({
         rows,
         hostOptions,
         workspaceHostScope,
-        defaultHostId
+        defaultHostId,
+        collapsedHostKeys: effectiveCollapsedGroups
       }),
-    [defaultHostId, hostOptions, rows, workspaceHostScope]
+    [defaultHostId, effectiveCollapsedGroups, hostOptions, rows, workspaceHostScope]
   )
   // Why: status headers change during wake (inactive -> active). Key only on
   // the grouping mode so row identity survives those ordinary status moves.

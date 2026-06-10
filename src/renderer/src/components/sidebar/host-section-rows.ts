@@ -24,6 +24,7 @@ export type HostHeaderRow = {
   // it can deep-link an "Update server/client required" row per skew direction.
   compatibility?: RuntimeCompatVerdict
   connectionStatus?: SshConnectionStatus
+  collapsed: boolean
   count: number
 }
 
@@ -89,6 +90,9 @@ export function addHostSectionRows(args: {
   hostOptions: readonly HostSectionOption[]
   workspaceHostScope: ExecutionHostScope
   defaultHostId: ExecutionHostId
+  // Why: host sections reuse the sidebar's persisted collapsed-group keys
+  // (`host:<hostId>`) so collapse state survives restarts like other groups.
+  collapsedHostKeys?: ReadonlySet<string>
 }): HostSectionRow[] {
   if (args.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE || args.hostOptions.length <= 1) {
     return [...args.rows]
@@ -132,6 +136,13 @@ export function addHostSectionRows(args: {
     }
   }
 
+  // Why: a lone host section is pure noise — the grouping only earns its keep
+  // when there are at least two host sections to tell apart. Registered-but-
+  // empty hosts stay visible in the scope picker, not as headers.
+  if (rowsByHostId.size <= 1) {
+    return [...args.rows]
+  }
+
   const result: HostSectionRow[] = [...globalRows]
   for (const hostId of hostOrder) {
     const hostRows = rowsByHostId.get(hostId)
@@ -139,6 +150,7 @@ export function addHostSectionRows(args: {
       continue
     }
     const host = hostOptionsById.get(hostId) ?? getFallbackHost(hostId)
+    const collapsed = args.collapsedHostKeys?.has(`host:${host.id}`) ?? false
     result.push({
       type: 'host-header',
       key: `host:${host.id}`,
@@ -149,9 +161,12 @@ export function addHostSectionRows(args: {
       health: host.health,
       compatibility: host.compatibility,
       connectionStatus: host.connectionStatus,
+      collapsed,
       count: countWorktreeRows(hostRows)
     })
-    result.push(...hostRows)
+    if (!collapsed) {
+      result.push(...hostRows)
+    }
   }
 
   return result

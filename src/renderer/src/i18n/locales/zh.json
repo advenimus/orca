@@ -3323,6 +3323,9 @@
           "ed1611b65b": "隐藏休眠项",
           "82594419ba": "过滤器"
         },
+        "SidebarHostScopeStrip": {
+          "connectedCount": "{{value0}} connected"
+        },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "代理活动布局",
           "3d4b9c4997": "徘徊",

@@ -17,6 +17,7 @@ import {
   type SidebarHostScopeOption
 } from './sidebar-host-options'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
+import { translate } from '@/i18n/i18n'
 
 function HostHealthDot({ health }: { health: SidebarHostScopeOption['health'] }) {
   if (health === 'connecting') {
@@ -51,8 +52,21 @@ const SidebarHostScopeStrip = React.memo(function SidebarHostScopeStrip() {
   const label = getSidebarHostScopeLabel(workspaceHostScope, hostScopeOptions)
   const selectedHost = hostOptions.find((host) => host.id === workspaceHostScope)
   const selectedScope = hostScopeOptions.find((option) => option.id === workspaceHostScope)
+  // Why: saved-but-idle hosts inflate a raw registry count; connection state
+  // is what users act on (per the design mock's "3 connected").
+  const connectedCount = hostOptions.filter(
+    (host) => host.health === 'local' || host.health === 'available'
+  ).length
   const meta =
-    workspaceHostScope === 'all' ? `${hostOptions.length} hosts` : (selectedHost?.detail ?? 'Host')
+    workspaceHostScope === 'all'
+      ? translate(
+          'auto.components.sidebar.SidebarHostScopeStrip.connectedCount',
+          '{{value0}} connected',
+          {
+            value0: connectedCount
+          }
+        )
+      : (selectedHost?.detail ?? 'Host')
 
   return (
     <div className="px-2 pb-1">

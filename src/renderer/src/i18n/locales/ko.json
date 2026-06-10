@@ -3323,6 +3323,9 @@
           "ed1611b65b": "슬립 중인 항목 숨기기",
           "82594419ba": "필터"
         },
+        "SidebarHostScopeStrip": {
+          "connectedCount": "{{value0}} connected"
+        },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "에이전트 활동 레이아웃",
           "3d4b9c4997": "호버",

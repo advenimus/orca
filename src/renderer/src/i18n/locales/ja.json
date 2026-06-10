@@ -3323,6 +3323,9 @@
           "ed1611b65b": "スリープ中を非表示",
           "82594419ba": "フィルター"
         },
+        "SidebarHostScopeStrip": {
+          "connectedCount": "{{value0}} connected"
+        },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "エージェントアクティビティのレイアウト",
           "3d4b9c4997": "ホバー",
