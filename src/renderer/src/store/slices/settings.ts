@@ -10,6 +10,7 @@ import {
 import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
+import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
@@ -74,6 +75,11 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       if ('terminalQuickCommands' in updates) {
         sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
           updates.terminalQuickCommands
+        )
+      }
+      if ('terminalCustomThemes' in updates) {
+        sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
+          updates.terminalCustomThemes
         )
       }
       if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
