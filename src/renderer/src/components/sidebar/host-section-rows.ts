@@ -114,10 +114,21 @@ export function addHostSectionRows(args: {
   // (`host:<hostId>`) so collapse state survives restarts like other groups.
   collapsedHostKeys?: ReadonlySet<string>
   forceCollapseHosts?: boolean
+  // Why: in the default Projects view, project is the user's primary object
+  // and host is context inside it. Explicit host filters still keep host
+  // headers as an operational/troubleshooting view.
+  preferProjectGrouping?: boolean
 }): HostSectionRow[] {
   const visibleHostIds =
     args.visibleWorkspaceHostIds ??
     (args.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [args.workspaceHostScope])
+  if (
+    args.preferProjectGrouping &&
+    args.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE &&
+    !args.visibleWorkspaceHostIds
+  ) {
+    return [...args.rows]
+  }
   if ((visibleHostIds && visibleHostIds.length <= 1) || args.hostOptions.length <= 1) {
     return [...args.rows]
   }

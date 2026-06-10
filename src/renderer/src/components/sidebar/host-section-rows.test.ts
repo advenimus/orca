@@ -152,6 +152,31 @@ describe('addHostSectionRows', () => {
     ])
   })
 
+  it('keeps project grouping outermost in the default Projects view', () => {
+    const local = repo('local')
+    const ssh = repo('ssh', 'ssh-1')
+    const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
+
+    const sectioned = addHostSectionRows({
+      rows,
+      hostOptions: [
+        {
+          id: 'local',
+          kind: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          health: 'local'
+        },
+        { id: 'ssh:ssh-1', kind: 'ssh', label: 'Builder', detail: 'SSH', health: 'available' }
+      ],
+      workspaceHostScope: 'all',
+      defaultHostId: 'local',
+      preferProjectGrouping: true
+    })
+
+    expect(sectioned).toEqual(rows)
+  })
+
   it('keeps host headers for a custom multi-host visibility filter', () => {
     const local = repo('local')
     const ssh = repo('ssh', 'ssh-1')
@@ -171,7 +196,8 @@ describe('addHostSectionRows', () => {
       ],
       workspaceHostScope: 'all',
       visibleWorkspaceHostIds: ['local', 'ssh:ssh-1'],
-      defaultHostId: 'local'
+      defaultHostId: 'local',
+      preferProjectGrouping: true
     })
 
     expect(sectioned.map(rowKey)).toEqual([

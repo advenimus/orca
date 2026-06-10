@@ -4345,11 +4345,13 @@ const WorktreeList = React.memo(function WorktreeList({
         visibleWorkspaceHostIds,
         defaultHostId,
         collapsedHostKeys: effectiveCollapsedGroups,
-        forceCollapseHosts: hostDragActive
+        forceCollapseHosts: hostDragActive,
+        preferProjectGrouping: groupBy === 'repo'
       }),
     [
       defaultHostId,
       effectiveCollapsedGroups,
+      groupBy,
       hostDragActive,
       orderedHostOptions,
       rows,
