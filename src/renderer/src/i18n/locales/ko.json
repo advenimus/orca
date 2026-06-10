@@ -992,6 +992,7 @@
         "f660aa1454": "연결 중",
         "7711ad5122": "로컬 설정 명령",
         "e5db1b0419": "결합된 설정 명령",
+        "runOn": "실행 위치",
         "addProjectBeforeWorkspace": "워크스페이스를 만들기 전에 프로젝트를 추가하세요."
       },
       "NewWorkspaceComposerModal": {
@@ -8214,6 +8215,10 @@
             "3e8bb1176a": "이슈를 검색하려면 설정에서 Linear를 연결하세요.",
             "69ce292138": "Linear",
             "9c004911c3": "gitlab"
+          },
+          "ProjectHostSetupCombobox": {
+            "empty": "이 프로젝트에 준비된 호스트가 없습니다.",
+            "placeholder": "호스트 선택"
           }
         }
       },

@@ -84,6 +84,10 @@ import {
   resolveWorkspaceCreationRepoId,
   resolveWorkspaceCreationTarget
 } from '@/lib/project-host-workspace-target'
+import {
+  buildProjectHostSetupOptions,
+  type ProjectHostSetupOption
+} from '@/lib/project-host-setup-options'
 import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
@@ -150,6 +154,9 @@ export type ComposerCardProps = {
   repoId: string
   selectedRepoIsGit: boolean
   onRepoChange: (value: string) => void
+  projectHostSetupOptions: ProjectHostSetupOption[]
+  selectedProjectHostSetupId: string | null
+  onProjectHostSetupChange: (setupId: string) => void
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
@@ -369,6 +376,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [eligibleRepos, projectHostSetups, projects, repoId, workspaceHostScope]
   )
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+  const selectedProjectId =
+    selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.projectId : null
+  const selectedProjectHostSetupId =
+    selectedWorkspaceTarget.status === 'ready'
+      ? selectedWorkspaceTarget.target.projectHostSetupId
+      : null
+  const projectHostSetupOptions = useMemo(
+    () =>
+      buildProjectHostSetupOptions({
+        projectId: selectedProjectId,
+        projectHostSetups,
+        eligibleRepos
+      }),
+    [eligibleRepos, projectHostSetups, selectedProjectId]
+  )
   const selectedRepoSettings = useMemo(() => {
     if (!settings) {
       return settings
@@ -1654,6 +1676,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [baseBranch, linkedWorkItem, repoId, setRepoId]
   )
+  const handleProjectHostSetupChange = useCallback(
+    (setupId: string): void => {
+      const option = projectHostSetupOptions.find((candidate) => candidate.id === setupId)
+      if (!option) {
+        return
+      }
+      handleRepoChange(option.repoId)
+    },
+    [handleRepoChange, projectHostSetupOptions]
+  )
 
   const showProjectRequiredError = useCallback((): void => {
     setProjectError('Choose or add a project before creating a workspace.')
@@ -2520,6 +2552,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     repoId,
     selectedRepoIsGit,
     onRepoChange: handleRepoChange,
+    projectHostSetupOptions,
+    selectedProjectHostSetupId,
+    onProjectHostSetupChange: handleProjectHostSetupChange,
     name,
     onNameValueChange: handleNameValueChange,
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,

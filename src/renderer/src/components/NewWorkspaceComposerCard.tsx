@@ -34,7 +34,9 @@ import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPreset
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
+import ProjectHostSetupCombobox from '@/components/new-workspace/ProjectHostSetupCombobox'
 import type { SetupConfig } from '@/lib/new-workspace'
+import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
@@ -53,6 +55,9 @@ type NewWorkspaceComposerCardProps = {
   repoId: string
   selectedRepoIsGit: boolean
   onRepoChange: (value: string) => void
+  projectHostSetupOptions: ProjectHostSetupOption[]
+  selectedProjectHostSetupId: string | null
+  onProjectHostSetupChange: (setupId: string) => void
   primaryActionLabel: string
   name: string
   onNameValueChange: (value: string) => void
@@ -233,6 +238,9 @@ export default function NewWorkspaceComposerCard({
   repoId,
   selectedRepoIsGit,
   onRepoChange,
+  projectHostSetupOptions,
+  selectedProjectHostSetupId,
+  onProjectHostSetupChange,
   primaryActionLabel,
   name,
   onNameValueChange,
@@ -456,6 +464,18 @@ export default function NewWorkspaceComposerCard({
                 'Add a project before creating a workspace.'
               )}
             </p>
+          ) : null}
+          {projectHostSetupOptions.length > 1 ? (
+            <div className="space-y-1">
+              <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
+                {translate('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
+              </label>
+              <ProjectHostSetupCombobox
+                options={projectHostSetupOptions}
+                value={selectedProjectHostSetupId}
+                onValueChange={onProjectHostSetupChange}
+              />
+            </div>
           ) : null}
           {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
             <div

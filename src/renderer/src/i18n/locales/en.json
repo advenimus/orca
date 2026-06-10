@@ -992,6 +992,7 @@
         "f660aa1454": "Connecting",
         "7711ad5122": "Local setup command",
         "e5db1b0419": "Combined setup command",
+        "runOn": "Run on",
         "addProjectBeforeWorkspace": "Add a project before creating a workspace."
       },
       "NewWorkspaceComposerModal": {
@@ -8233,6 +8234,10 @@
             "3e8bb1176a": "Connect Linear in Settings to search issues.",
             "69ce292138": "linear",
             "9c004911c3": "gitlab"
+          },
+          "ProjectHostSetupCombobox": {
+            "empty": "No hosts are ready for this project.",
+            "placeholder": "Choose host"
           }
         }
       },

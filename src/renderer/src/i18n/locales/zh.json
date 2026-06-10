@@ -992,6 +992,7 @@
         "f660aa1454": "连接中",
         "7711ad5122": "本地设置命令",
         "e5db1b0419": "组合设置命令",
+        "runOn": "运行位置",
         "addProjectBeforeWorkspace": "在创建工作区之前添加项目。"
       },
       "NewWorkspaceComposerModal": {
@@ -8214,6 +8215,10 @@
             "3e8bb1176a": "在设置中连接 Linear 以搜索议题。",
             "69ce292138": "Linear",
             "9c004911c3": "GitLab"
+          },
+          "ProjectHostSetupCombobox": {
+            "empty": "此项目没有准备就绪的主机。",
+            "placeholder": "选择主机"
           }
         }
       },
