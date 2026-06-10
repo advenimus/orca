@@ -1,5 +1,5 @@
 import { AppState } from 'react-native'
-import { addNetworkStateListener, type NetworkState } from 'expo-network'
+import { addNetworkStateListener, getNetworkStateAsync, type NetworkState } from 'expo-network'
 
 // Why: Android/iOS suspend JS timers and silently kill sockets while the app
 // is backgrounded, and network handoffs (Wi-Fi → cellular) kill the TCP path
@@ -13,6 +13,17 @@ export function subscribeConnectionRevivalTriggers(nudge: () => void): () => voi
     }
   })
   let lastNetwork: Pick<NetworkState, 'isConnected' | 'type'> | null = null
+  let disposed = false
+  // Why: the listener only fires on *changes*; without a seeded baseline the
+  // first change after subscribing (app launched offline, network returns)
+  // would be swallowed by the previous == null guard below.
+  void getNetworkStateAsync()
+    .then((state) => {
+      if (!disposed && lastNetwork == null) {
+        lastNetwork = { isConnected: state.isConnected, type: state.type }
+      }
+    })
+    .catch(() => {})
   const networkSub = addNetworkStateListener((state) => {
     const previous = lastNetwork
     lastNetwork = { isConnected: state.isConnected, type: state.type }
@@ -32,6 +43,7 @@ export function subscribeConnectionRevivalTriggers(nudge: () => void): () => voi
     }
   })
   return () => {
+    disposed = true
     appStateSub.remove()
     networkSub.remove()
   }
