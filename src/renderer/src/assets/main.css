@@ -562,7 +562,7 @@
    sidebar so the native macOS traffic lights and sidebar chrome sit in the
    same vertical band they use in settings/landing. The center and right
    workspace columns are offset separately to align with this 36px baseline
-   (4px drag strip + 32px tab row). */
+   (the center column's 36px tab row matches it directly). */
 .titlebar-left {
   height: 36px;
   min-height: 36px;
