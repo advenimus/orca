@@ -711,6 +711,20 @@ export default function ChecksPanel(): React.JSX.Element {
     prCreationDefaults,
     onBranchChangedByGeneration: handleBranchChangedByPullRequestGeneration
   })
+  const handlePrBaseChange = useCallback(
+    (value: string): void => {
+      setCreatePrError(null)
+      setPrBase(value)
+    },
+    [setPrBase]
+  )
+  const handlePrTitleChange = useCallback(
+    (value: string): void => {
+      setCreatePrError(null)
+      setPrTitle(value)
+    },
+    [setPrTitle]
+  )
   const stateRequestKey =
     repo && branch
       ? activeGitLabReview
@@ -2483,7 +2497,7 @@ export default function ChecksPanel(): React.JSX.Element {
           url: result.url
         })
         if (prCreationDefaults.openAfterCreate) {
-          window.api.shell.openUrl(result.url)
+          openHttpLink(result.url, { worktreeId: activeWorktreeId })
         }
         setCreatePrPushFirst(false)
         return
@@ -2546,6 +2560,7 @@ export default function ChecksPanel(): React.JSX.Element {
     }
   }, [
     activeWorktreePath,
+    activeWorktreeId,
     branch,
     createComposerOpen,
     createHostedReview,
@@ -2654,9 +2669,9 @@ export default function ChecksPanel(): React.JSX.Element {
               provider={hostedReviewCreateProvider}
               branch={branch}
               base={prBase}
-              setBase={setPrBase}
+              setBase={handlePrBaseChange}
               title={prTitle}
-              setTitle={setPrTitle}
+              setTitle={handlePrTitleChange}
               body={prBody}
               setBody={setPrBody}
               draft={prDraft}

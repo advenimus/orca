@@ -120,7 +120,10 @@ export function CreateHostedReviewComposer({
   // user knows what's blocking submission instead of a silent gray state.
   let createDisabledReason: string | undefined
   if (generating) {
-    createDisabledReason = 'Wait for AI generation to finish.'
+    createDisabledReason = translate(
+      'auto.components.right.sidebar.SourceControl.318e2a7f88',
+      'Wait for AI generation to finish.'
+    )
   } else if (title.trim().length === 0) {
     createDisabledReason = translate(
       'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
@@ -128,9 +131,15 @@ export function CreateHostedReviewComposer({
       { value0: copy.reviewLabel }
     )
   } else if (normalizedBase.trim().length === 0) {
-    createDisabledReason = 'Choose a base branch.'
+    createDisabledReason = translate(
+      'auto.components.right.sidebar.SourceControl.f76307c1f7',
+      'Choose a base branch.'
+    )
   } else if (baseSameAsBranch) {
-    createDisabledReason = 'Base branch must differ from the head branch.'
+    createDisabledReason = translate(
+      'auto.components.right.sidebar.SourceControl.4f76c0a9de',
+      'Base branch must differ from the head branch.'
+    )
   }
 
   // Why: lock the title/body/base inputs while AI generation is running so

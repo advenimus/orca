@@ -234,6 +234,8 @@ export function useCreatePullRequestDialogFields({
       return
     }
     if (!hasExternalGeneration) {
+      // Why: a branch/context switch invalidates any local AI request; cancel
+      // it before reseeding fields so stale generated text cannot land later.
       generationRequestIdRef.current += 1
       const requestContext = generationSeedRef.current?.context
       if (generateInFlightRef.current && requestContext?.worktreePath) {

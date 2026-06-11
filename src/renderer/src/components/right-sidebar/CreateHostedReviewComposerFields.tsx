@@ -185,11 +185,15 @@ export function CreateHostedReviewComposerFields({
             <button
               key={ref}
               type="button"
+              disabled={fieldsLocked}
               className={cn(
-                'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left font-mono text-xs hover:bg-accent',
+                'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left font-mono text-xs hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent',
                 stripBaseRef(base) === ref && 'bg-accent text-accent-foreground'
               )}
               onClick={() => {
+                if (fieldsLocked) {
+                  return
+                }
                 setBase(ref)
                 setBaseQuery('')
                 setBaseResults([])
