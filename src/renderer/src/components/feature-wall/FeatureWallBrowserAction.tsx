@@ -14,7 +14,6 @@ import {
   promptForSetupGuideProject,
   useSetupTargetWorktree
 } from './FeatureWallSetupWorkflowActions'
-import { translate } from '@/i18n/i18n'
 
 export function BrowserAction(props: { done: boolean }): React.JSX.Element {
   const targetWorktree = useSetupTargetWorktree()

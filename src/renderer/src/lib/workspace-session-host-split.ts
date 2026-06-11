@@ -63,6 +63,7 @@ const FIELD_OWNERSHIP = {
   activeGroupIdByWorktree: 'worktreeKeyed',
   lastVisitedAtByWorktreeId: 'worktreeKeyed',
   defaultTerminalTabsAppliedByWorktreeId: 'worktreeKeyed',
+  activeWorkspaceKey: 'global',
   activeWorktreeIdsOnShutdown: 'worktreeArray',
   terminalLayoutsByTabId: 'tabKeyed',
   remoteSessionIdsByTabId: 'tabKeyed',

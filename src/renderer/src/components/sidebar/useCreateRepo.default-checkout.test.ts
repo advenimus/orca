@@ -200,7 +200,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     const repo = makeRepo({ connectionId: 'ssh-1', path: '/srv/created' })
     mocks.createRemoteRepo.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockResolvedValue(true)
-    const { useCreateRepo } = await import('./AddRepoCreateStep')
+    const { useCreateRepo } = await import('./useCreateRepo')
 
     const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
       sshTargetId: 'ssh-1'

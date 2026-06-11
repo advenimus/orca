@@ -14,6 +14,7 @@ import {
   FolderInput,
   FolderPlus,
   FolderX,
+  Loader2,
   Plus,
   Server,
   ServerOff,
@@ -180,7 +181,7 @@ import {
   pruneWorktreeSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { splitWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-host-split'
 import {
   getSettingsFocusedExecutionHostId,

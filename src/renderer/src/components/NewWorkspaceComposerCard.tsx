@@ -42,6 +42,7 @@ import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
+const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
 
 type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
@@ -245,8 +246,8 @@ export default function NewWorkspaceComposerCard({
   repoId,
   selectedRepoIsGit,
   onRepoChange,
-  projectHostSetupOptions,
-  selectedProjectHostSetupId,
+  projectHostSetupOptions = EMPTY_PROJECT_HOST_SETUP_OPTIONS,
+  selectedProjectHostSetupId = null,
   onProjectHostSetupChange,
   primaryActionLabel,
   projectLabel,
@@ -500,7 +501,7 @@ export default function NewWorkspaceComposerCard({
               </label>
               <ProjectHostSetupCombobox
                 options={readyProjectHostSetupOptions}
-                value={selectedProjectHostSetupId}
+                value={selectedProjectHostSetupId ?? null}
                 onValueChange={handleProjectHostSetupChange}
               />
             </div>

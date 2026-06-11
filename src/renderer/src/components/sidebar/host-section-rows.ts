@@ -59,6 +59,8 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
     case 'pending-creation':
     case 'imported-worktrees-card':
       return getRepoHostId(row.repo, defaultHostId)
+    case 'folder-workspace':
+      return getRepoHostId(undefined, defaultHostId)
     case 'header':
       return row.repo ? getRepoHostId(row.repo, defaultHostId) : null
   }

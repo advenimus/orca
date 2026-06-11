@@ -1016,6 +1016,11 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       // clients must not pretend they can run that local IPC path directly.
       throw new Error('SSH clone is unavailable in paired web clients.')
     },
+    createRemote: async () => {
+      // Why: SSH relay project creation is owned by the desktop main process;
+      // paired web clients cannot create folders through local SSH IPC.
+      throw new Error('SSH project creation is unavailable in paired web clients.')
+    },
     cloneAbort: () => Promise.resolve(),
     addRemote: async ({ remotePath, displayName, kind }) => {
       invalidateRuntimeWorktreeCaches()

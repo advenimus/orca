@@ -1529,6 +1529,7 @@ describe('project groups', () => {
       new Set(),
       new Map(),
       [],
+      undefined,
       [folderWorkspace]
     )
 
@@ -1605,6 +1606,7 @@ describe('project groups', () => {
       new Set(),
       new Map(),
       [],
+      undefined,
       [folderWorkspace]
     )
 
@@ -1673,6 +1675,7 @@ describe('project groups', () => {
       new Set(),
       new Map(),
       [],
+      undefined,
       [folderWorkspace]
     )
 
