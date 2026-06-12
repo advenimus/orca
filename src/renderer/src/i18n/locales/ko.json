@@ -3934,18 +3934,18 @@
           }
         },
         "FolderWorkspaceComposerDialog": {
-          "connectFailed": "Failed to connect to project.",
-          "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
-          "title": "Create Folder Workspace",
+          "connectFailed": "프로젝트에 연결하지 못했습니다.",
+          "noRepos": "GitHub 또는 GitLab 작업을 연결하려면 이 폴더 아래에 Git 프로젝트를 추가하세요.",
+          "title": "폴더 워크스페이스 만들기",
           "create": "워크스페이스 만들기",
-          "sourceProject": "Task Source",
-          "chooseSourceProject": "Choose task source"
+          "sourceProject": "작업 소스",
+          "chooseSourceProject": "작업 소스 선택"
         },
         "ProjectOrderManualDefaultNotice": {
-          "a1f4c2d8e0": "Manual project order is now default",
-          "822ff300ad": "Dismiss",
-          "b7e3a91c4f": "Drag project headers to reorder, or switch to",
-          "e8c1f4a2b9": "in workspace options."
+          "a1f4c2d8e0": "수동 프로젝트 순서가 이제 기본값입니다",
+          "822ff300ad": "닫기",
+          "b7e3a91c4f": "프로젝트 헤더를 드래그하여 순서를 바꾸거나",
+          "e8c1f4a2b9": "정렬을 워크스페이스 옵션에서 선택하세요."
         }
       },
       "shared": {

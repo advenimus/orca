@@ -3934,18 +3934,18 @@
           }
         },
         "FolderWorkspaceComposerDialog": {
-          "connectFailed": "Failed to connect to project.",
-          "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
-          "title": "Create Folder Workspace",
+          "connectFailed": "无法连接到项目。",
+          "noRepos": "在此文件夹下添加 Git 项目，以关联 GitHub 或 GitLab 任务。",
+          "title": "创建文件夹工作区",
           "create": "创建工作区",
-          "sourceProject": "Task Source",
-          "chooseSourceProject": "Choose task source"
+          "sourceProject": "任务来源",
+          "chooseSourceProject": "选择任务来源"
         },
         "ProjectOrderManualDefaultNotice": {
-          "a1f4c2d8e0": "Manual project order is now default",
-          "822ff300ad": "Dismiss",
-          "b7e3a91c4f": "Drag project headers to reorder, or switch to",
-          "e8c1f4a2b9": "in workspace options."
+          "a1f4c2d8e0": "手动项目排序现在是默认设置",
+          "822ff300ad": "关闭",
+          "b7e3a91c4f": "拖动项目标题即可重新排序，或在工作区选项中切换到",
+          "e8c1f4a2b9": "。"
         }
       },
       "shared": {
