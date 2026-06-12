@@ -263,7 +263,25 @@ function getElectronTargetPlatform() {
 }
 
 function getElectronTargetArch() {
-  return process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch || process.arch
+  const explicitArch = process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch
+  if (explicitArch) {
+    return explicitArch
+  }
+  // Why: /usr/local (Intel Homebrew) ships a universal node; under its x86_64
+  // slice or Rosetta, process.arch reports 'x64' on Apple Silicon, so we'd fetch
+  // an Intel Electron and macOS warns "Support Ending for Intel-based Apps".
+  // Mirror stock electron/install.js: prefer the native arm64 build instead.
+  if (process.platform === 'darwin' && process.arch === 'x64' && isRunningUnderRosetta()) {
+    return 'arm64'
+  }
+  return process.arch
+}
+
+function isRunningUnderRosetta() {
+  const result = spawnSync('sysctl', ['-in', 'sysctl.proc_translated'], {
+    encoding: 'utf8'
+  })
+  return result.status === 0 && result.stdout.trim() === '1'
 }
 
 function getElectronPlatformPath(targetPlatform) {

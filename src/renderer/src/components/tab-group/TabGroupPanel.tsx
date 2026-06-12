@@ -213,8 +213,7 @@ export default function TabGroupPanel({
             // `border-l` at the sidebar seam, and the right sidebar paints
             // its own `borderLeft` at the right seam — painting our own
             // border-l/border-r in those spots stacks a second 1px line
-            // next to it, reading as a ~2px bar below the drag strip
-            // (where the sibling border continues alone above).
+            // next to it, reading as a ~2px bar at the sidebar seam.
             ` ${touchesLeftEdge ? '' : 'border-l'} ${touchesRightEdge ? '' : 'border-r'} border-border border-b ${isFocused ? 'border-b-accent' : 'opacity-95'}`
           : ''
       }`}
@@ -234,7 +233,7 @@ export default function TabGroupPanel({
           this, the empty space after tabs in the center column is dead — the
           user can only drag from the tiny left-sidebar header strip. */}
       <div
-        className="h-[32px] shrink-0 border-b border-border bg-card"
+        className="h-[36px] shrink-0 border-b border-border bg-card"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div className="flex h-full items-stretch pr-1.5">
