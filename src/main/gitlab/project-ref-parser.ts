@@ -33,7 +33,8 @@ function makeProjectRef(
   knownHosts: readonly string[]
 ): ProjectRef | null {
   const normalizedHost = normalizeGitLabHost(host)
-  if (!knownHosts.map(normalizeGitLabHost).includes(normalizedHost)) {
+  const normalizedKnownHosts = knownHosts.map(normalizeGitLabHost)
+  if (!normalizedKnownHosts.includes(normalizedHost)) {
     return null
   }
   return makeProjectRefForTrustedHost(normalizedHost, path)

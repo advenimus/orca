@@ -469,31 +469,31 @@
           "path": {
             "status": {
               "title": {
-                "missing": "Folder not found",
+                "missing": "フォルダーが見つかりません",
                 "not": {
-                  "directory": "Path is not a folder"
+                  "directory": "パスはフォルダーではありません"
                 },
                 "ambiguous": {
-                  "connection": "Cannot determine connection"
+                  "connection": "接続を特定できません"
                 },
-                "unavailable": "Cannot check folder"
+                "unavailable": "フォルダーを確認できません"
               },
               "description": {
-                "missing": "Orca cannot find {{value0}}. Remove and re-import this folder workspace.",
+                "missing": "Orca は {{value0}} を見つけられません。このフォルダーワークスペースを削除して再インポートしてください。",
                 "not": {
-                  "directory": "{{value0}} exists, but it is not a folder."
+                  "directory": "{{value0}} は存在しますが、フォルダーではありません。"
                 },
                 "ambiguous": {
-                  "connection": "Orca cannot tell which SSH connection owns this folder scope."
+                  "connection": "Orca はこのフォルダースコープをどの SSH 接続が所有しているか判別できません。"
                 },
-                "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
+                "unavailable": "Orca は現在このフォルダーを確認できません。ランタイムまたは SSH 接続を確認して再試行してください。"
               },
               "create": {
                 "description": {
-                  "missing": "Orca cannot find {{value0}}. Remove and re-import the folder."
+                  "missing": "Orca は {{value0}} を見つけられません。フォルダーを削除して再インポートしてください。"
                 },
                 "title": {
-                  "failed": "Failed to create folder workspace"
+                  "failed": "フォルダーワークスペースの作成に失敗しました"
                 }
               }
             }

@@ -469,31 +469,31 @@
           "path": {
             "status": {
               "title": {
-                "missing": "Folder not found",
+                "missing": "未找到文件夹",
                 "not": {
-                  "directory": "Path is not a folder"
+                  "directory": "路径不是文件夹"
                 },
                 "ambiguous": {
-                  "connection": "Cannot determine connection"
+                  "connection": "无法确定连接"
                 },
-                "unavailable": "Cannot check folder"
+                "unavailable": "无法检查文件夹"
               },
               "description": {
-                "missing": "Orca cannot find {{value0}}. Remove and re-import this folder workspace.",
+                "missing": "Orca 找不到 {{value0}}。请移除并重新导入此文件夹工作区。",
                 "not": {
-                  "directory": "{{value0}} exists, but it is not a folder."
+                  "directory": "{{value0}} 存在，但它不是文件夹。"
                 },
                 "ambiguous": {
-                  "connection": "Orca cannot tell which SSH connection owns this folder scope."
+                  "connection": "Orca 无法判断哪个 SSH 连接拥有此文件夹范围。"
                 },
-                "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
+                "unavailable": "Orca 现在无法验证此文件夹。请检查运行时或 SSH 连接，然后重试。"
               },
               "create": {
                 "description": {
-                  "missing": "Orca cannot find {{value0}}. Remove and re-import the folder."
+                  "missing": "Orca 找不到 {{value0}}。请移除并重新导入该文件夹。"
                 },
                 "title": {
-                  "failed": "Failed to create folder workspace"
+                  "failed": "创建文件夹工作区失败"
                 }
               }
             }

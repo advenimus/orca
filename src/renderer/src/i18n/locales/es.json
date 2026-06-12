@@ -469,31 +469,31 @@
           "path": {
             "status": {
               "title": {
-                "missing": "Folder not found",
+                "missing": "Carpeta no encontrada",
                 "not": {
-                  "directory": "Path is not a folder"
+                  "directory": "La ruta no es una carpeta"
                 },
                 "ambiguous": {
-                  "connection": "Cannot determine connection"
+                  "connection": "No se puede determinar la conexión"
                 },
-                "unavailable": "Cannot check folder"
+                "unavailable": "No se puede comprobar la carpeta"
               },
               "description": {
-                "missing": "Orca cannot find {{value0}}. Remove and re-import this folder workspace.",
+                "missing": "Orca no puede encontrar {{value0}}. Elimina y vuelve a importar este espacio de trabajo de carpeta.",
                 "not": {
-                  "directory": "{{value0}} exists, but it is not a folder."
+                  "directory": "{{value0}} existe, pero no es una carpeta."
                 },
                 "ambiguous": {
-                  "connection": "Orca cannot tell which SSH connection owns this folder scope."
+                  "connection": "Orca no puede determinar qué conexión SSH pertenece a este ámbito de carpeta."
                 },
-                "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
+                "unavailable": "Orca no puede verificar esta carpeta ahora mismo. Revisa el runtime o la conexión SSH e inténtalo de nuevo."
               },
               "create": {
                 "description": {
-                  "missing": "Orca cannot find {{value0}}. Remove and re-import the folder."
+                  "missing": "Orca no puede encontrar {{value0}}. Elimina y vuelve a importar la carpeta."
                 },
                 "title": {
-                  "failed": "Failed to create folder workspace"
+                  "failed": "No se pudo crear el espacio de trabajo de carpeta"
                 }
               }
             }

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { formatCost, formatTokens } from './usage-formatters'
 
 export type UsageBreakdownRow = {
   key: string
@@ -8,23 +9,6 @@ export type UsageBreakdownRow = {
   eventsOrTurns: number
   hasInferredPricing?: boolean
   estimatedCostUsd?: number | null
-}
-
-function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
-  }
-  return value.toLocaleString()
-}
-
-function formatCost(value: number | null | undefined): string {
-  if (value === null || value === undefined) {
-    return 'n/a'
-  }
-  return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
 }
 
 type UsageBreakdownSectionProps = {

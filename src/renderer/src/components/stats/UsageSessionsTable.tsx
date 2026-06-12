@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { formatTokens } from './usage-formatters'
 
 export type UsageSessionRow = {
   sessionId: string
@@ -12,16 +13,6 @@ export type UsageSessionRow = {
   cacheTokens?: number
   totalTokens?: number
   hasInferredPricing?: boolean
-}
-
-function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k`
-  }
-  return value.toLocaleString()
 }
 
 function formatSessionTime(timestamp: string): string {
