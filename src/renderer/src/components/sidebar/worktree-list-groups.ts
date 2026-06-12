@@ -796,20 +796,27 @@ export function buildRows(
         compareRecentRank(recentRankForEntry(left), recentRankForEntry(right))
       )
     }
-    // Manual: within a Project Group, projects order by their per-group rank
-    // (projectGroupOrder), not the global repoOrder.
+    const manualFallbackRank = new Map(
+      entries.map((entry) => [entry[0], manualRankForEntry(entry, repoOrder)])
+    )
+    // Why: legacy grouped projects may not have projectGroupOrder yet. Falling
+    // back to manual rank keeps one-project drag writes able to land between
+    // old siblings instead of any finite order jumping ahead of all missing ones.
     return [...entries].sort((left, right) => {
       const leftOrder = left[1].repo?.projectGroupOrder
       const rightOrder = right[1].repo?.projectGroupOrder
       const leftRank =
         typeof leftOrder === 'number' && Number.isFinite(leftOrder)
           ? leftOrder
-          : Number.POSITIVE_INFINITY
+          : (manualFallbackRank.get(left[0]) ?? Number.POSITIVE_INFINITY) * 1000
       const rightRank =
         typeof rightOrder === 'number' && Number.isFinite(rightOrder)
           ? rightOrder
-          : Number.POSITIVE_INFINITY
-      return leftRank - rightRank
+          : (manualFallbackRank.get(right[0]) ?? Number.POSITIVE_INFINITY) * 1000
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank
+      }
+      return left[1].label.localeCompare(right[1].label)
     })
   }
 

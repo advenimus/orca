@@ -3815,6 +3815,12 @@
           "create": "Create workspace",
           "sourceProject": "Task Source",
           "chooseSourceProject": "Choose task source"
+        },
+        "ProjectOrderManualDefaultNotice": {
+          "a1f4c2d8e0": "Manual project order is now default",
+          "822ff300ad": "Dismiss",
+          "b7e3a91c4f": "Drag project headers to reorder, or switch to",
+          "e8c1f4a2b9": "in workspace options."
         }
       },
       "shared": {
